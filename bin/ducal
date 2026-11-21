@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# ducal: manage the ducal desktop.
+#   ducal theme           list themes (current one marked with *)
+#   ducal theme <name>    switch the whole desktop to a theme
+#   ducal help            show this help
+set -uo pipefail
+
+DUCAL_ROOT=${DUCAL_ROOT:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}
+# shellcheck source=../lib/common.sh
+source "$DUCAL_ROOT/lib/common.sh"
+
+THEMES_DIR="$DUCAL_ROOT/themes"
+CURRENT_FILE="$DUCAL_CONFIG_DIR/current"
+SHELL_OVERLAY="$HOME/.themes/Ducal/gnome-shell/gnome-shell.css"
+FALLBACK_GTK="Tokyonight-Dark"
+
+notes=()
+note() { notes+=("$1"); }
+
+usage() { sed -n '2,5p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
+
+current_theme() { [[ -f $CURRENT_FILE ]] && cat "$CURRENT_FILE"; }
+
+list_themes() {
+  local cur dir name
+  cur=$(current_theme)
+  echo "Available themes:"
+  for dir in "$THEMES_DIR"/*/; do
+    name=$(basename "$dir")
+    if [[ $name == "$cur" ]]; then echo "  * $name"; else echo "    $name"; fi
+  done
+  echo
+  echo "Usage: ducal theme <name>"
+}
+
+apply_terminal() {
+  local dir=$1
+  link_file "$dir/kitty.conf" "$HOME/.config/kitty/current-theme.conf"
+  pkill -USR1 -x kitty 2>/dev/null || true # live-reload running kitty windows
+  link_file "$dir/fish.fish" "$HOME/.config/fish/conf.d/ducal-theme.fish"
+  link_file "$dir/starship.toml" "$HOME/.config/starship.toml"
+  link_file "$dir/lazygit.yml" "$HOME/.config/lazygit/config.yml"
+}
+
+apply_btop() {
+  local conf="$HOME/.config/btop/btop.conf" theme="/usr/share/btop/themes/$BTOP_THEME.theme"
+  [[ -f $conf ]] || return 0
+  sed -i -E "s|^color_theme = .*|color_theme = \"$theme\"|" "$conf"
+}
+
+apply_vscode() {
+  local conf="$HOME/.config/Code/User/settings.json"
+  [[ -f $conf ]] || return 0
+  if grep -q '"workbench.colorTheme"' "$conf"; then
+    sed -i -E "s|(\"workbench.colorTheme\": *)\"[^\"]*\"|\1\"$VSCODE_THEME\"|" "$conf"
+  else
+    note "VS Code: add \"workbench.colorTheme\" to settings.json to let ducal manage it"
+  fi
+}
+
+apply_launcher() {
+  local p=/org/gnome/shell/extensions/search-light
+  dconf write $p/background-color "$(hex_to_rgba_tuple "$BG" 0.95)"
+  dconf write $p/text-color "$(hex_to_rgba_tuple "$FG")"
+  dconf write $p/entry-text-color "$(hex_to_rgba_tuple "$FG")"
+  dconf write $p/border-color "$(hex_to_rgba_tuple "$ACCENT")"
+}
+
+apply_gtk() {
+  if [[ -d "$HOME/.themes/$GTK_THEME" ]]; then
+    gtk_name=$GTK_THEME
+  else
+    gtk_name=$FALLBACK_GTK
+    note "App windows: GTK theme $GTK_THEME is not installed, keeping $FALLBACK_GTK"
+  fi
+  gsettings set org.gnome.desktop.interface gtk-theme "$gtk_name"
+  gsettings set org.gnome.desktop.wm.preferences theme "$gtk_name"
+  gsettings set org.gnome.desktop.interface icon-theme "$ICON_THEME"
+
+  local css="$HOME/.config/gtk-4.0/gtk.css" gtk4="$HOME/.themes/$gtk_name/gtk-4.0/gtk-dark.css"
+  [[ -f $gtk4 ]] || gtk4="$HOME/.themes/$gtk_name/gtk-4.0/gtk.css"
+  if [[ -f $css ]] && head -1 "$css" | grep -q '^@import'; then
+    sed -i "1s|.*|@import url(\"file://$gtk4\");|" "$css"
+  fi
+}
+
+apply_shell() {
+  local base="$HOME/.themes/$gtk_name/gnome-shell/gnome-shell.css"
+  [[ -f $base ]] || base="$HOME/.themes/$FALLBACK_GTK/gnome-shell/gnome-shell.css"
+  mkdir -p "$(dirname "$SHELL_OVERLAY")"
+  sed -e "s|{{SHELL_BASE}}|$base|g" -e "s|{{NAME}}|$NAME|g" \
+    -e "s|{{BG_RGB}}|$BG_RGB|g" -e "s|{{BG_ALT}}|$BG_ALT|g" -e "s|{{BG_HOVER}}|$BG_HOVER|g" \
+    -e "s|{{BG}}|$BG|g" -e "s|{{FG_DIM}}|$FG_DIM|g" -e "s|{{FG}}|$FG|g" \
+    -e "s|{{MUTED}}|$MUTED|g" -e "s|{{BORDER}}|$BORDER|g" -e "s|{{ACCENT}}|$ACCENT|g" \
+    "$DUCAL_ROOT/templates/gnome-shell.css" >"$SHELL_OVERLAY"
+  # GNOME only reloads the shell theme when its name changes
+  dconf write /org/gnome/shell/extensions/user-theme/name "'$gtk_name'"
+  sleep 0.5
+  dconf write /org/gnome/shell/extensions/user-theme/name "'Ducal'"
+}
+
+apply_wallpaper() {
+  local file="$DUCAL_DATA_DIR/wallpapers/$WALLPAPER_FILE" uri
+  if [[ ! -f $file ]]; then
+    note "Wallpaper not downloaded yet: run ./install.sh --only assets"
+    return 0
+  fi
+  uri="file://$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$file")"
+  gsettings set org.gnome.desktop.background picture-uri "$uri"
+  gsettings set org.gnome.desktop.background picture-uri-dark "$uri"
+}
+
+cmd_theme() {
+  [[ $# -eq 0 ]] && { list_themes; return 0; }
+  local name=$1 dir="$THEMES_DIR/$1"
+  if [[ ! -f "$dir/palette.env" ]]; then
+    echo "Unknown theme: $name" >&2
+    list_themes >&2
+    return 1
+  fi
+  # shellcheck source=/dev/null
+  source "$dir/palette.env"
+  log_step "Applying $NAME"
+  apply_terminal "$dir"
+  apply_btop
+  apply_vscode
+  apply_launcher
+  apply_gtk
+  apply_shell
+  apply_wallpaper
+  mkdir -p "$DUCAL_CONFIG_DIR"
+  echo "$name" >"$CURRENT_FILE"
+  log_ok "$NAME is active. Open a new terminal and reopen Neovim to see every change."
+  local n
+  for n in "${notes[@]}"; do log_warn "$n"; done
+}
+
+case ${1:-help} in
+  theme) shift; cmd_theme "$@" ;;
+  help | -h | --help) usage ;;
+  *) echo "Unknown command: $1" >&2; usage >&2; exit 1 ;;
+esac
