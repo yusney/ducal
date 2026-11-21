@@ -7,7 +7,7 @@ ducal turns a fresh Ubuntu install into a cohesive, themed workspace inspired by
 one color palette shared by the desktop, the terminal, the editor and the tools you
 use every day. Switch the whole desktop to another palette with a single command.
 
-> **Status: work in progress.** The apps and configuration modules and the
+> **Status: work in progress.** The apps, GNOME and configuration modules and the
 > `ducal theme` command work today. The remaining modules are listed in the [roadmap](#roadmap).
 
 ## What you get
@@ -70,6 +70,22 @@ A theme switch updates kitty (live), fish, Starship, Neovim, yazi, btop, lazygit
 the launcher, notifications, the lock screen, the top bar and the wallpaper.
 Open a new terminal and reopen Neovim to see every change.
 
+## Keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Super+Space` | Launcher |
+| `Super+H/J/K/L` | Focus window left / down / up / right (Forge) |
+| `Ctrl+Super+H/J/K/L` | Swap window |
+| `Shift+Super+H/J/K/L` | Move window |
+| `Super+C` | Toggle floating window |
+| `Ctrl+Alt+L` | Lock screen |
+| `Shift+Super+Space` | Switch keyboard layout |
+
+ducal moves the lock screen to `Ctrl+Alt+L` and frees `Super+H` because Forge uses
+`Super+H/J/K/L` for focus. It also disables Ubuntu Dock, Tiling Assistant and the
+desktop icons, which clash with this setup.
+
 ## Project layout
 
 ```
@@ -93,7 +109,7 @@ Then run `ducal theme <name>`.
 
 - [x] Configuration module and `ducal theme`
 - [x] Applications: base tools plus optional extras
-- [ ] GNOME setup (extensions, dock, top bar, Forge, launcher, shortcuts)
+- [x] GNOME setup (extensions, dock, top bar, Forge, launcher, shortcuts)
 - [ ] Theme assets (GTK theme, cursors, icons, wallpapers)
 - [ ] Login screen and boot splash, with one-command restore
 - [ ] Optional cleanup of preinstalled software you do not need

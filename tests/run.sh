@@ -194,6 +194,84 @@ test_theme_apply_sets_yazi_flavor() {
   assert_contains "$HOME/.config/yazi/theme.toml" 'dark = "gruvbox-dark"'
 }
 
+# ---------------------------------------------------------------- gnome
+# Stateful stubs: installed extensions in $SANDBOX/ext-installed, gsettings
+# extension lists in $SANDBOX/enabled and $SANDBOX/disabled.
+stub_gnome_tools() {
+  local s="$SANDBOX/stubs"
+  : > "$SANDBOX/ext-installed"
+  echo "['ding@rastersoft.com', 'other@example.com']" > "$SANDBOX/enabled"
+  echo "['forge@jmmaranan.com']" > "$SANDBOX/disabled"
+  printf '#!/usr/bin/env bash\necho "GNOME Shell 46.0"\n' > "$s/gnome-shell"
+  cat > "$s/gnome-extensions" <<EOF
+#!/usr/bin/env bash
+echo "gnome-extensions \$*" >> "\$STUB_LOG"
+[[ \$1 == list ]] && cat "$SANDBOX/ext-installed"
+exit 0
+EOF
+  cat > "$s/gsettings" <<EOF
+#!/usr/bin/env bash
+echo "gsettings \$*" >> "\$STUB_LOG"
+key=\${3:-}
+f="$SANDBOX/\${key%-extensions}"
+if [[ \$2 == org.gnome.shell && \$key == *-extensions ]]; then
+  [[ \$1 == get ]] && cat "\$f"
+  [[ \$1 == set ]] && echo "\$4" > "\$f"
+fi
+exit 0
+EOF
+  cat > "$s/curl" <<'EOF'
+#!/usr/bin/env bash
+echo "curl $*" >> "$STUB_LOG"
+for a in "$@"; do [[ $a == *extension-info* ]] && { echo '{"download_url": "/download-extension/x.shell-extension.zip?version_tag=1"}'; exit 0; }; done
+out=""; while [[ $# -gt 0 ]]; do [[ $1 == -o ]] && out=$2; shift; done
+[[ -n $out ]] && echo zip > "$out"
+exit 0
+EOF
+  cat > "$s/dconf" <<EOF
+#!/usr/bin/env bash
+echo "dconf \$*" >> "\$STUB_LOG"
+[[ \$1 == load ]] && cat > "$SANDBOX/dconf-loaded"
+exit 0
+EOF
+  chmod +x "$s"/*
+}
+
+test_gnome_module_installs_only_missing_extensions() {
+  stub_gnome_tools
+  printf 'dash-to-dock@micxgx.gmail.com\nforge@jmmaranan.com\n' > "$SANDBOX/ext-installed"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "uuid=search-light@icedman.github.com&shell_version=46"
+  assert_contains "$STUB_LOG" "uuid=blur-my-shell@aunetx&shell_version=46"
+  assert_not_contains "$STUB_LOG" "uuid=forge@jmmaranan.com"
+  assert_not_contains "$STUB_LOG" "uuid=dash-to-dock@micxgx.gmail.com"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "4" "4 missing extensions"
+}
+
+test_gnome_module_enables_ours_and_keeps_user_extensions() {
+  stub_gnome_tools
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  local enabled disabled
+  enabled=$(cat "$SANDBOX/enabled"); disabled=$(cat "$SANDBOX/disabled")
+  [[ $enabled == *"'other@example.com'"* ]] || fail "user extension dropped: $enabled"
+  [[ $enabled == *"'forge@jmmaranan.com'"* && $enabled == *"'search-light@icedman.github.com'"* ]] || fail "missing ours: $enabled"
+  [[ $enabled != *ding@rastersoft.com* ]] || fail "ding should be disabled: $enabled"
+  assert_eq "$(grep -o 'forge@jmmaranan.com' <<<"$enabled" | wc -l)" "1" "no duplicates after two runs"
+  [[ $disabled == *"'ubuntu-dock@ubuntu.com'"* && $disabled == *"'ding@rastersoft.com'"* ]] || fail "disabled: $disabled"
+  [[ $disabled != *forge@jmmaranan.com* ]] || fail "forge must leave the disabled list: $disabled"
+}
+
+test_gnome_module_loads_desktop_settings() {
+  stub_gnome_tools
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "dconf load /"
+  assert_contains "$SANDBOX/dconf-loaded" "screensaver=['<Control><Alt>l']"
+  assert_contains "$SANDBOX/dconf-loaded" "[org/gnome/shell/extensions/dash-to-dock]"
+  assert_not_contains "$SANDBOX/dconf-loaded" "DP-4"
+}
+
 # ---------------------------------------------------------------- run
 ORIG_PATH=$PATH
 ORIG_HOME=$HOME
