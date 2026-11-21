@@ -41,11 +41,17 @@ The installer is **idempotent**: running it again is safe. Any file of yours tha
 ducal replaces is kept next to it as `<file>.ducal-backup-<timestamp>`.
 
 The installer asks which optional extras to add: Chrome, VS Code, Docker, Go,
-Rust, Steam and Discord. Skip the questions with an environment variable:
+Rust, Node.js (through fnm), Steam and Discord. Skip the questions with an environment variable:
 
 ```bash
 DUCAL_EXTRAS=chrome,code,docker ./install.sh   # or DUCAL_EXTRAS=all / none
 ```
+
+The `node` extra installs [fnm](https://github.com/Schniz/fnm) and the latest
+Node.js LTS, and adds the default version to the session `PATH`
+(`~/.config/environment.d/60-ducal-node.conf`), so programs started outside a
+terminal, such as editors and AI agents, find `node`, `npx` and global npm tools.
+Log out and back in to apply it. Switch versions with `fnm default <version>`.
 
 Installing Docker adds your user to the `docker` group, which grants root-equivalent
 access through the Docker daemon.

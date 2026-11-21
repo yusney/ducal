@@ -166,7 +166,7 @@ test_parse_extras_accepts_known_list_all_and_none() {
   out=$(bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; parse_extras 'chrome, code'")
   assert_eq "$out" "chrome code"
   out=$(bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; parse_extras all")
-  assert_eq "$out" "chrome code docker go rust steam discord"
+  assert_eq "$out" "chrome code docker go rust node steam discord"
   out=$(bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; parse_extras none")
   assert_eq "$out" ""
 }
@@ -187,6 +187,44 @@ test_apps_module_skips_tools_already_installed() {
   assert_eq "$rc" "0"
   assert_not_contains "$STUB_LOG" "curl"
   assert_not_contains "$STUB_LOG" "apt-get install"
+}
+
+# Stub fnm binary at $1 that logs its calls.
+write_fnm_stub() {
+  mkdir -p "$(dirname "$1")"
+  printf '#!/usr/bin/env bash\necho "fnm $*" >> "%s"\n' "$STUB_LOG" > "$1"
+  chmod +x "$1"
+}
+
+test_node_extra_skips_existing_fnm_and_exposes_node_to_the_session() {
+  stub_package_tools
+  local fnm_dir="$HOME/.local/share/fnm"
+  write_fnm_stub "$fnm_dir/fnm"
+  mkdir -p "$fnm_dir/aliases/default/bin"
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_extra_node" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "curl"
+  assert_not_contains "$STUB_LOG" "fnm install"
+  # Non-interactive programs (editors, MCP servers, AI agents) get Node from the session environment
+  assert_contains "$HOME/.config/environment.d/60-ducal-node.conf" 'PATH=${HOME}/.local/share/fnm/aliases/default/bin:${PATH}'
+}
+
+test_node_extra_installs_fnm_and_lts_when_missing() {
+  stub_package_tools
+  local fnm_dir="$HOME/.local/share/fnm"
+  # The fnm installer script (served by the curl stub) drops a stub fnm binary
+  {
+    echo "$(declare -f write_fnm_stub)"
+    echo "STUB_LOG='$STUB_LOG'; write_fnm_stub '$fnm_dir/fnm'"
+  } > "$SANDBOX/fnm-install.sh"
+  printf '#!/usr/bin/env bash\necho "curl $*" >> "%s"\ncat "%s"\n' "$STUB_LOG" "$SANDBOX/fnm-install.sh" > "$SANDBOX/stubs/curl"
+  chmod +x "$SANDBOX/stubs/curl"
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_extra_node" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "curl -fsSL https://fnm.vercel.app/install"
+  assert_contains "$STUB_LOG" "fnm install --lts"
+  assert_contains "$STUB_LOG" "fnm default lts-latest"
+  assert_contains "$HOME/.config/environment.d/60-ducal-node.conf" 'aliases/default/bin'
 }
 
 test_theme_apply_colors_the_workspace_bar() {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Module: apps — base applications, then the optional extras.
-# Extras: set DUCAL_EXTRAS="chrome,code,docker,go,rust,steam,discord" (or all / none)
+# Extras: set DUCAL_EXTRAS="chrome,code,docker,go,rust,node,steam,discord" (or all / none)
 # to skip the questions; otherwise the installer asks for each one.
 # Sourced by install.sh (DUCAL_ROOT and lib/common.sh are already loaded).
 
