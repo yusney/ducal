@@ -7,8 +7,7 @@ ducal turns a fresh Ubuntu install into a cohesive, themed workspace inspired by
 one color palette shared by the desktop, the terminal, the editor and the tools you
 use every day. Switch the whole desktop to another palette with a single command.
 
-> **Status: work in progress.** The apps, GNOME, configuration and assets modules and the
-> `ducal theme` command work today. The remaining modules are listed in the [roadmap](#roadmap).
+> **Status: work in progress.** Every module except the optional cleanup works today. The remaining modules are listed in the [roadmap](#roadmap).
 
 ## What you get
 
@@ -51,6 +50,19 @@ DUCAL_EXTRAS=chrome,code,docker ./install.sh   # or DUCAL_EXTRAS=all / none
 Installing Docker adds your user to the `docker` group, which grants root-equivalent
 access through the Docker daemon.
 
+The last module themes the login screen and the boot splash. It changes system
+files, so it asks first (or set `DUCAL_SYSTEM=yes` / `no`). Add your own logo next
+to the distribution name with `DUCAL_LOGO=/path/to/logo.svg`. Undo it at any time:
+
+```bash
+ducal system restore
+```
+
+Restore switches back to the distribution's login theme and boot splash, and puts
+back the logo line that `/etc/gdm3/greeter.dconf-defaults` had before ducal changed it.
+Everything is built before any system file is touched, so a bad logo or a missing
+theme stops the module without changing your system.
+
 Run or inspect single modules:
 
 ```bash
@@ -64,6 +76,7 @@ Run or inspect single modules:
 ducal theme                # list themes, current one marked with *
 ducal theme gruvbox        # switch the whole desktop to Gruvbox
 ducal theme tokyo-night    # back to Tokyo Night
+ducal system restore       # back to the distribution login screen and boot splash
 ```
 
 A theme switch updates kitty (live), fish, Starship, Neovim, yazi, btop, lazygit, VS Code,
@@ -111,7 +124,7 @@ Then run `ducal theme <name>`.
 - [x] Applications: base tools plus optional extras
 - [x] GNOME setup (extensions, dock, top bar, Forge, launcher, shortcuts)
 - [x] Theme assets (GTK themes, cursors, icons, wallpapers)
-- [ ] Login screen and boot splash, with one-command restore
+- [x] Login screen and boot splash, with one-command restore
 - [ ] Optional cleanup of preinstalled software you do not need
 - [ ] Screenshots
 

@@ -57,6 +57,15 @@ hex_to_rgba_tuple() {
     'BEGIN { printf "(%.3f, %.3f, %.3f, %s)", r/255, g/255, b/255, a }'
 }
 
+# render_template FILE — prints FILE with {{VAR}} placeholders replaced by the
+# palette variables loaded from a theme's palette.env.
+render_template() {
+  sed -e "s|{{NAME}}|$NAME|g" -e "s|{{BG_RGB}}|$BG_RGB|g" -e "s|{{BG_ALT}}|$BG_ALT|g" \
+    -e "s|{{BG_HOVER}}|$BG_HOVER|g" -e "s|{{BG}}|$BG|g" -e "s|{{FG_DIM}}|$FG_DIM|g" \
+    -e "s|{{FG}}|$FG|g" -e "s|{{MUTED}}|$MUTED|g" -e "s|{{BORDER}}|$BORDER|g" \
+    -e "s|{{ACCENT}}|$ACCENT|g" "$1"
+}
+
 # Run a command with sudo only when not already root.
 as_root() {
   if [[ $EUID -eq 0 ]]; then "$@"; else sudo "$@"; fi

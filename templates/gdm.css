@@ -1,0 +1,47 @@
+/* ducal login screen (GDM): {{NAME}}
+ * Appended to the GTK theme's GNOME Shell stylesheet by `ducal` (lib/system.sh). */
+
+/* Background */
+#lockDialogGroup { background-color: {{BG}}; }
+.login-dialog { background-color: transparent; }
+
+/* Password entry */
+.login-dialog StEntry {
+  color: {{FG}};
+  background-color: rgba({{BG_RGB}}, 0.85);
+  border: 2px solid {{BORDER}};
+  border-radius: 0;
+}
+
+.login-dialog StEntry:focus {
+  color: {{FG}};
+  background-color: rgba({{BG_RGB}}, 0.95);
+  border: 2px solid {{ACCENT}} !important;
+  box-shadow: none !important;
+}
+
+.login-dialog StEntry StLabel.hint-text { color: {{MUTED}}; }
+
+/* User list */
+.login-dialog .user-widget-label { color: {{FG}}; }
+.login-dialog .login-dialog-user-list-item:focus .user-widget-label,
+.login-dialog .login-dialog-user-list-item:selected .user-widget-label { color: {{ACCENT}}; }
+.login-dialog .login-dialog-user-list-item:focus,
+.login-dialog .login-dialog-user-list-item:hover { background-color: {{BG_ALT}}; border-radius: 0; }
+
+/* User icon when there is no photo */
+.user-icon { color: {{ACCENT}}; }
+.user-icon StIcon {
+  background-color: {{BG_ALT}};
+  color: {{ACCENT}};
+  border: 2px solid {{ACCENT}};
+}
+.user-icon:hover StIcon { background-color: {{BG_HOVER}}; color: {{FG}}; }
+.user-icon.user-avatar { border: 2px solid {{ACCENT}}; }
+
+/* Texts and buttons */
+.login-dialog .login-dialog-banner,
+.login-dialog .login-dialog-message { color: {{FG_DIM}}; }
+.login-dialog .modal-dialog-button { border-radius: 0; color: {{ACCENT}}; }
+.login-dialog-logo-bin,
+.login-dialog .login-dialog-not-listed-label { color: {{MUTED}}; }

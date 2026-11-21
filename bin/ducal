@@ -2,6 +2,7 @@
 # ducal: manage the ducal desktop.
 #   ducal theme           list themes (current one marked with *)
 #   ducal theme <name>    switch the whole desktop to a theme
+#   ducal system restore  restore the distribution login screen and boot splash
 #   ducal help            show this help
 set -uo pipefail
 
@@ -17,7 +18,7 @@ FALLBACK_GTK="Tokyonight-Dark"
 notes=()
 note() { notes+=("$1"); }
 
-usage() { sed -n '2,5p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,6p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
 
 current_theme() { [[ -f $CURRENT_FILE ]] && cat "$CURRENT_FILE"; }
 
@@ -94,11 +95,7 @@ apply_shell() {
   local base="$HOME/.themes/$gtk_name/gnome-shell/gnome-shell.css"
   [[ -f $base ]] || base="$HOME/.themes/$FALLBACK_GTK/gnome-shell/gnome-shell.css"
   mkdir -p "$(dirname "$SHELL_OVERLAY")"
-  sed -e "s|{{SHELL_BASE}}|$base|g" -e "s|{{NAME}}|$NAME|g" \
-    -e "s|{{BG_RGB}}|$BG_RGB|g" -e "s|{{BG_ALT}}|$BG_ALT|g" -e "s|{{BG_HOVER}}|$BG_HOVER|g" \
-    -e "s|{{BG}}|$BG|g" -e "s|{{FG_DIM}}|$FG_DIM|g" -e "s|{{FG}}|$FG|g" \
-    -e "s|{{MUTED}}|$MUTED|g" -e "s|{{BORDER}}|$BORDER|g" -e "s|{{ACCENT}}|$ACCENT|g" \
-    "$DUCAL_ROOT/templates/gnome-shell.css" >"$SHELL_OVERLAY"
+  render_template "$DUCAL_ROOT/templates/gnome-shell.css" | sed "s|{{SHELL_BASE}}|$base|g" >"$SHELL_OVERLAY"
   # GNOME only reloads the shell theme when its name changes
   dconf write /org/gnome/shell/extensions/user-theme/name "'$gtk_name'"
   sleep 0.5
@@ -142,8 +139,24 @@ cmd_theme() {
   for n in "${notes[@]}"; do log_warn "$n"; done
 }
 
+cmd_system() {
+  case ${1:-} in
+    restore)
+      # shellcheck source=../lib/system.sh
+      source "$DUCAL_ROOT/lib/system.sh"
+      # errexit so the first failed step stops the restore and is reported
+      # Bash ignores errexit in a command followed by || or &&, so test $? afterwards
+      (set -e; system_restore)
+      local rc=$?
+      if [[ $rc -ne 0 ]]; then log_error "Restore did not finish; see the messages above"; return "$rc"; fi
+      ;;
+    *) echo "Usage: ducal system restore" >&2; return 1 ;;
+  esac
+}
+
 case ${1:-help} in
   theme) shift; cmd_theme "$@" ;;
+  system) shift; cmd_system "$@" ;;
   help | -h | --help) usage ;;
   *) echo "Unknown command: $1" >&2; usage >&2; exit 1 ;;
 esac

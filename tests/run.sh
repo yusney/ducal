@@ -326,6 +326,142 @@ test_assets_module_skips_what_is_already_installed() {
   assert_eq "$(cat "$HOME/.config/ducal/current")" "gruvbox" "user's theme kept"
 }
 
+# ---------------------------------------------------------------- system
+# A fake system root with the files the system module reads; sudo runs the
+# command as is and every system-changing command only logs.
+setup_sysroot() {
+  stub_package_tools
+  export DUCAL_SYSROOT="$SANDBOX/root"
+  local r=$DUCAL_SYSROOT s="$SANDBOX/stubs" c
+  mkdir -p "$r/usr/share/gnome-shell/theme/Yaru" "$r/usr/share/plymouth/themes/spinner" "$r/etc/gdm3"
+  cp /usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource "$r/usr/share/gnome-shell/theme/Yaru/"
+  for f in animation-0001 throbber-0001 bullet entry lock capslock keyboard keymap-render; do
+    echo png > "$r/usr/share/plymouth/themes/spinner/$f.png"
+  done
+  printf '[org/gnome/login-screen]\n#logo=%s\n\n[org/gnome/desktop/interface]\n' "'/x.png'" > "$r/etc/gdm3/greeter.dconf-defaults"
+  printf 'NAME="Ubuntu"\nVERSION="24.04.5 LTS (Noble Numbat)"\nID=ubuntu\n' > "$r/etc/os-release"
+  for c in update-alternatives update-initramfs dpkg-reconfigure; do
+    printf '#!/usr/bin/env bash\necho "%s $*" >> "$STUB_LOG"\n' "$c" > "$s/$c"
+  done
+  chmod +x "$s"/*
+  # GTK theme the login screen builds on
+  mkdir -p "$HOME/.themes/Tokyonight-Dark/gnome-shell/assets"
+  printf '.a { background: url("assets/x.svg"); }\n.b { background: url("resource:///org/gnome/shell/theme/gnome-shell-start.svg"); }\n' \
+    > "$HOME/.themes/Tokyonight-Dark/gnome-shell/gnome-shell.css"
+  echo '<svg/>' > "$HOME/.themes/Tokyonight-Dark/gnome-shell/assets/x.svg"
+  printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 25"><rect width="100" height="25"/></svg>\n' > "$SANDBOX/logo.svg"
+}
+
+gdm_css() { gresource extract "$DUCAL_SYSROOT/usr/share/gnome-shell/theme/ducal/gnome-shell-theme.gresource" /org/gnome/shell/theme/gdm.css; }
+
+test_system_install_with_logo_themes_login_and_boot() {
+  setup_sysroot
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/logo.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  local r=$DUCAL_SYSROOT
+  gdm_css > "$SANDBOX/gdm.css" 2>/dev/null || fail "gresource missing or unreadable"
+  assert_contains "$SANDBOX/gdm.css" "#lockDialogGroup { background-color: #1a1b26; }"
+  assert_contains "$SANDBOX/gdm.css" ".login-dialog StEntry:focus {"
+  assert_not_contains "$SANDBOX/gdm.css" ".login-dialog StEntry, .unlock-dialog StEntry:focus"
+  assert_not_contains "$SANDBOX/gdm.css" "{{"
+  gresource list "$r/usr/share/gnome-shell/theme/ducal/gnome-shell-theme.gresource" > "$SANDBOX/res"
+  assert_contains "$SANDBOX/res" "/org/gnome/shell/theme/assets/x.svg"
+  assert_contains "$SANDBOX/res" "/org/gnome/shell/theme/gnome-shell-start.svg"
+  assert_contains "$STUB_LOG" "update-alternatives --set gdm-theme.gresource $r/usr/share/gnome-shell/theme/ducal/gnome-shell-theme.gresource"
+  assert_contains "$r/etc/gdm3/greeter.dconf-defaults" "logo='$r/usr/share/pixmaps/ducal-logo.svg'"
+  assert_contains "$r/usr/share/pixmaps/ducal-logo.svg" "24.04.5 LTS"
+  assert_contains "$r/etc/gdm3/greeter.dconf-defaults.ducal-logo-line" "#logo='/x.png'"
+  assert_contains "$STUB_LOG" "dpkg-reconfigure gdm3"
+  local p="$r/usr/share/plymouth/themes/ducal"
+  assert_contains "$p/ducal.plymouth" "BackgroundStartColor=0x1a1b26"
+  assert_contains "$p/ducal.plymouth" "ImageDir=/usr/share/plymouth/themes/ducal"
+  [[ -s $p/watermark.png && -f $p/throbber-0001.png ]] || fail "plymouth images missing"
+  assert_contains "$STUB_LOG" "update-alternatives --set default.plymouth $p/ducal.plymouth"
+  assert_contains "$STUB_LOG" "update-initramfs -u"
+}
+
+test_system_install_without_logo_keeps_distro_logo() {
+  setup_sysroot
+  DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "ducal-logo"
+  [[ ! -e $DUCAL_SYSROOT/usr/share/plymouth/themes/ducal/watermark.png ]] || fail "no watermark expected"
+}
+
+test_system_install_twice_keeps_the_original_logo_line() {
+  setup_sysroot
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/logo.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/logo.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1
+  assert_eq "$(grep -c 'logo=' "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults")" "1"
+  "$ROOT/bin/ducal" system restore >/dev/null 2>&1
+  assert_contains "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "#logo='/x.png'"
+}
+
+test_system_logo_with_namespaced_svg_is_composed() {
+  setup_sysroot
+  printf '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10"><defs><rect id="r" width="5" height="5"/></defs><use xlink:href="#r"/></svg>\n' > "$SANDBOX/inkscape.svg"
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/inkscape.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  python3 -c "import sys,xml.dom.minidom as m; m.parse(sys.argv[1])" "$DUCAL_SYSROOT/usr/share/pixmaps/ducal-logo.svg" 2>/dev/null ||
+    fail "composed logo is not valid XML"
+}
+
+test_system_reinstall_without_logo_removes_the_logo() {
+  setup_sysroot
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/logo.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1
+  DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1
+  assert_not_contains "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "ducal-logo"
+  assert_contains "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "#logo='/x.png'"
+  [[ ! -e $DUCAL_SYSROOT/usr/share/pixmaps/ducal-logo.svg ]] || fail "logo file left behind"
+}
+
+test_system_logo_line_is_added_when_missing() {
+  setup_sysroot
+  printf '[org/gnome/login-screen]\ndisable-user-list=false\n' > "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults"
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/logo.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "logo='$DUCAL_SYSROOT/usr/share/pixmaps/ducal-logo.svg'"
+  "$ROOT/bin/ducal" system restore >/dev/null 2>&1
+  assert_not_contains "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "logo="
+}
+
+test_system_bad_logo_fails_before_changing_the_system() {
+  setup_sysroot
+  echo "not an svg" > "$SANDBOX/bad.svg"
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/bad.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "1"
+  assert_not_contains "$STUB_LOG" "update-alternatives"
+}
+
+test_system_restore_reports_failure() {
+  setup_sysroot
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$SANDBOX/stubs/update-alternatives"
+  "$ROOT/bin/ducal" system restore >/dev/null 2>&1; local rc=$?
+  [[ $rc -ne 0 ]] || fail "restore must fail when a step fails"
+}
+
+test_system_module_does_nothing_unless_accepted() {
+  setup_sysroot
+  DUCAL_SYSTEM=no "$ROOT/install.sh" --only system >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "update-alternatives"
+  "$ROOT/install.sh" --only system </dev/null >/dev/null 2>&1
+  assert_not_contains "$STUB_LOG" "update-alternatives"
+}
+
+test_system_restore_returns_to_ubuntu_defaults() {
+  setup_sysroot
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/logo.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1
+  : > "$STUB_LOG"
+  "$ROOT/bin/ducal" system restore >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  local r=$DUCAL_SYSROOT
+  assert_contains "$STUB_LOG" "update-alternatives --set gdm-theme.gresource $r/usr/share/gnome-shell/theme/Yaru/gnome-shell-theme.gresource"
+  assert_contains "$STUB_LOG" "update-alternatives --set default.plymouth $r/usr/share/plymouth/themes/bgrt/bgrt.plymouth"
+  assert_not_contains "$r/etc/gdm3/greeter.dconf-defaults" "ducal-logo"
+  assert_contains "$STUB_LOG" "update-initramfs -u"
+}
+
 # ---------------------------------------------------------------- run
 ORIG_PATH=$PATH
 ORIG_HOME=$HOME
