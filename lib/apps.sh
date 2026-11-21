@@ -199,6 +199,19 @@ install_extra_node() {
   mkdir -p "$HOME/.config/environment.d"
   printf '%s\n' '# Managed by ducal: Node.js (fnm default) for every program in the session' \
     'PATH=${HOME}/.local/share/fnm/aliases/default/bin:${PATH}' > "$HOME/.config/environment.d/60-ducal-node.conf"
+  install_ccstatusline "$fnm_dir/aliases/default/bin"
+}
+
+# Status line for Claude Code; the config module wires it up (pinned: its config format is versioned)
+install_ccstatusline() {
+  local bin=$1
+  [[ -x $bin/ccstatusline ]] && return 0
+  if [[ ! -x $bin/npm ]]; then
+    log_warn "npm not found; skipping the Claude Code status line"
+    return 0
+  fi
+  log_step "Installing ccstatusline"
+  PATH="$bin:$PATH" "$bin/npm" install -g ccstatusline@2.2.34
 }
 
 install_extra_steam() {

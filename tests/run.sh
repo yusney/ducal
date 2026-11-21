@@ -130,6 +130,33 @@ test_config_module_never_overwrites_seeded_files() {
   assert_eq "$(cat "$HOME/.config/btop/btop.conf")" "my btop"
 }
 
+test_config_module_sets_up_the_claude_status_line() {
+  printf '#!/usr/bin/env bash\n' > "$SANDBOX/stubs/ccstatusline"; chmod +x "$SANDBOX/stubs/ccstatusline"
+  mkdir -p "$HOME/.claude"; echo '{"model": "opus", "env": {"A": "1"}}' > "$HOME/.claude/settings.json"
+  "$ROOT/install.sh" --only config >/dev/null 2>&1; local rc1=$?
+  "$ROOT/install.sh" --only config >/dev/null 2>&1; local rc2=$?
+  assert_eq "$rc1/$rc2" "0/0"
+  assert_eq "$(jq -c '.statusLine' "$HOME/.claude/settings.json")" '{"type":"command","command":"ccstatusline","padding":0,"refreshInterval":10}'
+  assert_eq "$(jq -c '[.model, .env.A]' "$HOME/.claude/settings.json")" '["opus","1"]' "existing settings kept"
+  assert_eq "$(jq -r '.powerline.theme' "$HOME/.config/ccstatusline/settings.json")" "tokyonight"
+}
+
+test_config_module_keeps_an_existing_claude_status_line() {
+  printf '#!/usr/bin/env bash\n' > "$SANDBOX/stubs/ccstatusline"; chmod +x "$SANDBOX/stubs/ccstatusline"
+  mkdir -p "$HOME/.claude" "$HOME/.config/ccstatusline"
+  echo '{"statusLine": {"type": "command", "command": "mine"}}' > "$HOME/.claude/settings.json"
+  echo '{"mine": true}' > "$HOME/.config/ccstatusline/settings.json"
+  "$ROOT/install.sh" --only config >/dev/null 2>&1
+  assert_eq "$(jq -r '.statusLine.command' "$HOME/.claude/settings.json")" "mine"
+  assert_eq "$(cat "$HOME/.config/ccstatusline/settings.json")" '{"mine": true}'
+}
+
+test_config_module_skips_the_status_line_without_ccstatusline() {
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" "$ROOT/install.sh" --only config >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  [[ ! -e $HOME/.claude/settings.json ]] || fail "settings.json must not be created without ccstatusline"
+}
+
 # ---------------------------------------------------------------- apps
 # Stubs for package tools: sudo runs the command, apt-get/curl only log.
 stub_package_tools() {
@@ -227,6 +254,21 @@ test_node_extra_skips_existing_fnm_and_exposes_node_to_the_session() {
   assert_not_contains "$STUB_LOG" "fnm install"
   # Non-interactive programs (editors, MCP servers, AI agents) get Node from the session environment
   assert_contains "$HOME/.config/environment.d/60-ducal-node.conf" 'PATH=${HOME}/.local/share/fnm/aliases/default/bin:${PATH}'
+}
+
+test_node_extra_installs_the_claude_status_line_tool() {
+  stub_package_tools
+  local bin="$HOME/.local/share/fnm/aliases/default/bin"
+  write_fnm_stub "$HOME/.local/share/fnm/fnm"
+  mkdir -p "$bin"
+  printf '#!/usr/bin/env bash\necho "npm $*" >> "%s"\n' "$STUB_LOG" > "$bin/npm"; chmod +x "$bin/npm"
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_extra_node" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "npm install -g ccstatusline@2.2.34"
+  # already installed: not reinstalled
+  : > "$STUB_LOG"; printf '#!/usr/bin/env bash\n' > "$bin/ccstatusline"; chmod +x "$bin/ccstatusline"
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_extra_node" >/dev/null 2>&1
+  assert_not_contains "$STUB_LOG" "npm install"
 }
 
 test_node_extra_installs_fnm_and_lts_when_missing() {
