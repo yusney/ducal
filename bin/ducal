@@ -60,6 +60,9 @@ apply_workspace_bar() {
   dconf write $p/active-workspace-text-color "'$BG'"
   dconf write $p/inactive-workspace-text-color "'$FG'"
   dconf write $p/empty-workspace-text-color "'$MUTED'"
+  # Occupied workspaces get a filled chip; empty ones stay plain
+  dconf write $p/inactive-workspace-background-color "'$BORDER'"
+  dconf write $p/empty-workspace-background-color "'rgba(0,0,0,0)'"
 }
 
 apply_btop() {

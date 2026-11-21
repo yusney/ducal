@@ -196,6 +196,9 @@ test_theme_apply_colors_the_workspace_bar() {
   assert_contains "$STUB_LOG" "dconf write $p/active-workspace-text-color '#282828'"
   assert_contains "$STUB_LOG" "dconf write $p/inactive-workspace-text-color '#d4be98'"
   assert_contains "$STUB_LOG" "dconf write $p/empty-workspace-text-color '#7c6f64'"
+  # Workspaces with windows get a filled chip so they stand out from empty ones
+  assert_contains "$STUB_LOG" "dconf write $p/inactive-workspace-background-color '#665c54'"
+  assert_contains "$STUB_LOG" "dconf write $p/empty-workspace-background-color 'rgba(0,0,0,0)'"
 }
 
 test_keys_shows_the_shortcut_guide() {
