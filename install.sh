@@ -53,7 +53,7 @@ main() {
     "")
       [[ -f /etc/os-release ]] && grep -q '^ID=ubuntu' /etc/os-release ||
         log_warn "ducal targets Ubuntu; continuing anyway"
-      select_install || die "Nothing installed: the selection was cancelled"
+      select_install || die "Nothing installed"
       log_step "Installing: ${DUCAL_GROUPS_SELECTED:-nothing}"
       while read -r f; do run_module "$f"; done < <(modules)
       log_step "Done. Log out and back in to load every change."

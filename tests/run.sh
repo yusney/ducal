@@ -378,6 +378,37 @@ test_selection_asks_for_the_items_of_the_chosen_groups() {
   assert_not_contains "$STUB_LOG" "chrome"
 }
 
+test_explicit_system_and_cleanup_answers_still_apply() {
+  local out
+  out=$(DUCAL_SYSTEM=yes DUCAL_CLEANUP=apps DUCAL_WSL=0 groups 'select_install; echo "$DUCAL_SYSTEM|$DUCAL_CLEANUP|$(group_on system && echo on)|$(group_on cleanup && echo on)"' 2>/dev/null)
+  assert_eq "$out" "yes|apps|on|on"
+}
+
+test_default_run_without_answers_skips_system_and_cleanup() {
+  local out
+  out=$(DUCAL_WSL=0 groups 'select_install; echo "$DUCAL_GROUPS_SELECTED|$DUCAL_SYSTEM|$DUCAL_CLEANUP|$DUCAL_EXTRAS"' 2>/dev/null)
+  assert_eq "$out" "terminal desktop-apps gnome|no|none|none"
+}
+
+test_false_group_does_not_abort_a_sourced_module() {
+  local out
+  out=$(bash -c "set -euo pipefail; DUCAL_ROOT='$ROOT'; source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; DUCAL_GROUPS_SELECTED=''; (source '$ROOT/install/50-system.sh'); echo rc=\$?" 2>/dev/null | tail -1)
+  assert_eq "$out" "rc=0"
+}
+
+test_wsl_drops_desktop_extras_with_a_warning() {
+  local out
+  out=$(DUCAL_WSL=1 DUCAL_EXTRAS=chrome,go,steam groups 'select_install; echo "$DUCAL_EXTRAS"' 2>"$SANDBOX/err")
+  assert_eq "$out" "go"
+  assert_contains "$SANDBOX/err" "chrome is not available on WSL"
+  assert_eq "$(DUCAL_WSL=1 DUCAL_EXTRAS=all groups 'select_install; echo "$DUCAL_EXTRAS"' 2>/dev/null)" "node,go,rust,docker"
+}
+
+test_config_module_does_not_theme_the_terminal_when_it_is_not_chosen() {
+  DUCAL_GROUPS_SELECTED="languages" "$ROOT/install.sh" --only config >/dev/null 2>&1
+  [[ ! -e $HOME/.config/starship.toml ]] || fail "terminal themed without the terminal group"
+}
+
 test_install_rejects_an_unknown_profile() {
   local err; err=$("$ROOT/install.sh" --profile gaming 2>&1); local rc=$?
   assert_eq "$rc" "1"

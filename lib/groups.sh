@@ -155,15 +155,41 @@ resolve_groups() {
 # its own with --only), every group is on, as before groups existed.
 group_on() { [[ -z ${DUCAL_GROUPS_SELECTED+x} || " $DUCAL_GROUPS_SELECTED " == *" $1 "* ]]; }
 
+# drop_desktop_items "chrome,go" | all -> the items WSL can install, with a warning for the rest
+drop_desktop_items() {
+  local input=${1// /} item out=()
+  [[ $input == all ]] && input=${DUCAL_GROUP_ITEMS[languages]// /,}
+  [[ $input == none ]] && { echo none; return 0; }
+  IFS=',' read -ra names <<<"$input"
+  for item in "${names[@]}"; do
+    if [[ " ${DUCAL_GROUP_ITEMS[desktop-apps]} " == *" $item "* ]]; then
+      log_warn "$item is not available on WSL, skipping it"
+      continue
+    fi
+    out+=("$item")
+  done
+  input=$(IFS=,; echo "${out[*]}")
+  echo "${input:-none}"
+}
+
 # select_install — resolves the groups once and the answers every module reads:
 # DUCAL_GROUPS_SELECTED, DUCAL_EXTRAS (items of the chosen groups), DUCAL_SYSTEM
 # (choosing the group is the consent) and DUCAL_CLEANUP (none unless chosen).
 # Answers already set in the environment win.
 select_install() {
-  local g picked items=()
+  local g picked items=() extra=""
   DUCAL_GROUPS_SELECTED=$(resolve_groups) || return 1
+  # An explicit answer turns its group on, as it did before groups existed
+  [[ ${DUCAL_SYSTEM:-} == yes ]] && extra+=" system"
+  [[ -n ${DUCAL_CLEANUP:-} && $DUCAL_CLEANUP != none ]] && extra+=" cleanup"
+  if [[ -n $extra ]]; then
+    DUCAL_GROUPS_SELECTED=$(parse_groups "$DUCAL_GROUPS_SELECTED$extra") || return 1
+  fi
   export DUCAL_GROUPS_SELECTED
-  if [[ -z ${DUCAL_EXTRAS:-} ]]; then
+  if [[ -n ${DUCAL_EXTRAS:-} ]] && is_wsl; then
+    export DUCAL_EXTRAS
+    DUCAL_EXTRAS=$(drop_desktop_items "$DUCAL_EXTRAS")
+  elif [[ -z ${DUCAL_EXTRAS:-} ]]; then
     for g in languages desktop-apps; do
       group_on "$g" || continue
       [[ -t 0 || -n ${DUCAL_ASK_ITEMS:-} ]] || continue

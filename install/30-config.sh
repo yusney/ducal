@@ -51,6 +51,6 @@ fi
 
 # The assets module applies the default theme once the GTK themes are in place;
 # without the GNOME group, apply it here so the terminal gets its colors.
-if ! group_on gnome && [[ ! -f $DUCAL_CONFIG_DIR/current ]]; then
+if group_on terminal && ! group_on gnome && [[ ! -f $DUCAL_CONFIG_DIR/current ]]; then
   "$DUCAL_ROOT/bin/ducal" theme tokyo-night
 fi
