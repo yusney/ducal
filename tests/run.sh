@@ -791,7 +791,7 @@ test_wallpaper_rejects_missing_and_non_image_files() {
 stub_search_tools() {
   local s="$SANDBOX/stubs"
   printf '#!/usr/bin/env bash\necho "xdg-open $*" >> "$STUB_LOG"\n' > "$s/xdg-open"
-  printf '#!/usr/bin/env bash\n[[ -f "%s/typed" ]] || exit 1\ncat "%s/typed"\n' "$SANDBOX" "$SANDBOX" > "$s/zenity"
+  printf '#!/usr/bin/env bash\necho "zenity $*" >> "$STUB_LOG"\n[[ -f "%s/typed" ]] || exit 1\ncat "%s/typed"\n' "$SANDBOX" "$SANDBOX" > "$s/zenity"
   chmod +x "$s/xdg-open" "$s/zenity"
 }
 
@@ -824,6 +824,24 @@ test_search_dialog_cancel_or_empty_opens_nothing() {
   echo "   " > "$SANDBOX/typed"
   "$ROOT/bin/ducal" search >/dev/null 2>&1
   assert_not_contains "$STUB_LOG" "xdg-open"
+}
+
+test_search_dialog_opens_only_once() {
+  stub_search_tools
+  echo "neovim" > "$SANDBOX/typed"
+  local run="$SANDBOX/run"
+  mkdir -p "$run"
+  # an open dialog holds the lock, as a second Super+B press would find it
+  exec 8>"$run/ducal-search.lock"
+  flock -n 8 || fail "could not take the lock"
+  XDG_RUNTIME_DIR=$run "$ROOT/bin/ducal" search >/dev/null 2>&1; local rc=$?
+  exec 8>&-
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "zenity"
+  assert_not_contains "$STUB_LOG" "xdg-open"
+  # once the dialog is closed, Super+B opens it again
+  XDG_RUNTIME_DIR=$run "$ROOT/bin/ducal" search >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "xdg-open https://www.google.com/search?q=neovim"
 }
 
 test_search_uses_a_custom_engine() {
