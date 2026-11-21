@@ -181,12 +181,32 @@ test_parse_extras_rejects_unknown_names() {
 test_apps_module_skips_tools_already_installed() {
   stub_package_tools
   printf '%s\n' git curl unzip fontconfig build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
-  for c in kitty nvim starship lazygit yazi ya fd; do fake_cmd "$c"; done
+  for c in kitty nvim starship lazygit yazi ya fd claude; do fake_cmd "$c"; done
   mkdir -p "$HOME/.local/share/fonts/JetBrainsMonoNerd"
   DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
   assert_not_contains "$STUB_LOG" "curl"
   assert_not_contains "$STUB_LOG" "apt-get install"
+}
+
+test_claude_is_skipped_when_already_installed() {
+  stub_package_tools
+  fake_cmd claude
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_claude" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "curl"
+}
+
+test_claude_uses_the_official_installer_when_missing() {
+  stub_package_tools
+  # The installer script served by the curl stub only records that it ran
+  printf '#!/usr/bin/env bash\necho "curl $*" >> "%s"\necho "echo claude-installer-ran >> %s"\n' "$STUB_LOG" "$STUB_LOG" > "$SANDBOX/stubs/curl"
+  chmod +x "$SANDBOX/stubs/curl"
+  # Keep any real claude on the host PATH out of the sandbox
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_claude" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "curl -fsSL https://claude.ai/install.sh"
+  assert_contains "$STUB_LOG" "claude-installer-ran"
 }
 
 # Stub fnm binary at $1 that logs its calls.

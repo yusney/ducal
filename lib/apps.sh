@@ -101,6 +101,13 @@ install_yazi() {
   [[ -d $flavors/gruvbox-dark.yazi ]] || ya pkg add bennyyip/gruvbox-dark || log_warn "Could not add the gruvbox-dark yazi flavor"
 }
 
+install_claude() {
+  has_cmd claude && return 0
+  log_step "Installing Claude Code CLI"
+  # Official native installer: puts the binary in ~/.local/bin and keeps it updated
+  curl -fsSL https://claude.ai/install.sh | bash
+}
+
 install_nerd_font() {
   [[ -d $DUCAL_FONT_DIR ]] && return 0
   local tmp; tmp=$(mktemp -d)
@@ -122,6 +129,7 @@ install_base() {
   install_starship
   install_lazygit
   install_yazi
+  install_claude
   install_nerd_font
 }
 

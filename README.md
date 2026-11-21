@@ -17,7 +17,7 @@ use every day. Switch the whole desktop to another palette with a single command
 | Launcher | Search Light on `Super+Space` |
 | Terminal | kitty + fish + Starship, JetBrainsMono Nerd Font |
 | Editor | Neovim with LazyVim, VS Code themed to match |
-| Tools | btop, lazygit, yazi, git, gh, ripgrep, fd |
+| Tools | btop, lazygit, yazi, git, gh, ripgrep, fd, [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) |
 | Themes | Tokyo Night and Gruvbox, switched everywhere with `ducal theme` |
 | System | Themed login screen (GDM) and boot splash (Plymouth), optional |
 

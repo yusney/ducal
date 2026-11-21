@@ -8,7 +8,7 @@
 source "$DUCAL_ROOT/lib/apps.sh"
 
 install_base
-log_ok "Base apps ready: kitty, fish, Neovim, Starship, btop, lazygit, yazi, git, gh, JetBrainsMono Nerd Font"
+log_ok "Base apps ready: kitty, fish, Neovim, Starship, btop, lazygit, yazi, git, gh, Claude Code CLI, JetBrainsMono Nerd Font"
 
 extras=$(select_extras) || exit 1
 for extra in $extras; do
