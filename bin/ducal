@@ -42,6 +42,12 @@ apply_terminal() {
   link_file "$dir/lazygit.yml" "$HOME/.config/lazygit/config.yml"
 }
 
+apply_yazi() {
+  mkdir -p "$HOME/.config/yazi"
+  printf '# Managed by `ducal theme`: changes here are overwritten.\n[flavor]\ndark = "%s"\n' \
+    "$YAZI_FLAVOR" >"$HOME/.config/yazi/theme.toml"
+}
+
 apply_btop() {
   local conf="$HOME/.config/btop/btop.conf" theme="/usr/share/btop/themes/$BTOP_THEME.theme"
   [[ -f $conf ]] || return 0
@@ -122,6 +128,7 @@ cmd_theme() {
   source "$dir/palette.env"
   log_step "Applying $NAME"
   apply_terminal "$dir"
+  apply_yazi
   apply_btop
   apply_vscode
   apply_launcher

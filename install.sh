@@ -34,7 +34,9 @@ main() {
     --only)
       [[ -n ${2:-} ]] || die "--only needs a module name (see --list)"
       local match
-      match=$(modules | while read -r f; do [[ $(module_name "$f") == "$2" ]] && echo "$f"; done)
+      match=$(modules | while read -r f; do
+        if [[ $(module_name "$f") == "$2" ]]; then echo "$f"; fi
+      done)
       [[ -n $match ]] || die "Unknown module: $2 (see --list)"
       run_module "$match"
       ;;

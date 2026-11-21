@@ -130,6 +130,70 @@ test_config_module_never_overwrites_seeded_files() {
   assert_eq "$(cat "$HOME/.config/btop/btop.conf")" "my btop"
 }
 
+# ---------------------------------------------------------------- apps
+# Stubs for package tools: sudo runs the command, apt-get/curl only log.
+stub_package_tools() {
+  local s="$SANDBOX/stubs"
+  printf '#!/usr/bin/env bash\n"$@"\n' > "$s/sudo"
+  printf '#!/usr/bin/env bash\necho "apt-get $*" >> "$STUB_LOG"\n' > "$s/apt-get"
+  printf '#!/usr/bin/env bash\necho "curl $*" >> "$STUB_LOG"\nexit 1\n' > "$s/curl"
+  # dpkg-query reports only the packages listed in $SANDBOX/installed as installed
+  printf '#!/usr/bin/env bash\npkg="${@: -1}"\ngrep -qx "$pkg" "%s/installed" && echo "install ok installed" || exit 1\n' "$SANDBOX" > "$s/dpkg-query"
+  chmod +x "$s"/*
+  : > "$SANDBOX/installed"
+}
+
+# Fake an installed command so its installer is skipped.
+fake_cmd() { printf '#!/usr/bin/env bash\n' > "$SANDBOX/stubs/$1"; chmod +x "$SANDBOX/stubs/$1"; }
+
+test_apt_install_only_installs_missing_packages() {
+  stub_package_tools
+  echo "git" > "$SANDBOX/installed"
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install git btop" >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "apt-get install -y btop"
+  assert_not_contains "$STUB_LOG" "install -y git"
+}
+
+test_apt_install_does_nothing_when_all_installed() {
+  stub_package_tools
+  printf 'git\nbtop\n' > "$SANDBOX/installed"
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install git btop" >/dev/null 2>&1
+  assert_not_contains "$STUB_LOG" "apt-get"
+}
+
+test_parse_extras_accepts_known_list_all_and_none() {
+  local out
+  out=$(bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; parse_extras 'chrome, code'")
+  assert_eq "$out" "chrome code"
+  out=$(bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; parse_extras all")
+  assert_eq "$out" "chrome code docker go rust steam discord"
+  out=$(bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; parse_extras none")
+  assert_eq "$out" ""
+}
+
+test_parse_extras_rejects_unknown_names() {
+  local err
+  err=$(bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; parse_extras 'chrome,nope'" 2>&1); local rc=$?
+  assert_eq "$rc" "1"
+  [[ $err == *"Unknown extra: nope"* ]] || fail "stderr: $err"
+}
+
+test_apps_module_skips_tools_already_installed() {
+  stub_package_tools
+  printf '%s\n' git curl unzip fontconfig build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
+  for c in kitty nvim starship lazygit yazi ya fd; do fake_cmd "$c"; done
+  mkdir -p "$HOME/.local/share/fonts/JetBrainsMonoNerd"
+  DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "curl"
+  assert_not_contains "$STUB_LOG" "apt-get install"
+}
+
+test_theme_apply_sets_yazi_flavor() {
+  "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1
+  assert_contains "$HOME/.config/yazi/theme.toml" 'dark = "gruvbox-dark"'
+}
+
 # ---------------------------------------------------------------- run
 ORIG_PATH=$PATH
 ORIG_HOME=$HOME
