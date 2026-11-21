@@ -170,6 +170,41 @@ test_config_module_skips_the_status_line_without_ccstatusline() {
   [[ ! -e $HOME/.claude/settings.json ]] || fail "settings.json must not be created without ccstatusline"
 }
 
+# ---------------------------------------------------------------- boot
+# fake_ducal_repo DIR — a git repo whose install.sh logs its arguments
+fake_ducal_repo() {
+  mkdir -p "$1"
+  printf '#!/usr/bin/env bash\necho "install $*" >> "$STUB_LOG"\n' > "$1/install.sh"
+  chmod +x "$1/install.sh"
+  git -C "$1" init -q && git -C "$1" add . && git -C "$1" -c user.name=t -c user.email=t@t commit -qm init
+}
+
+test_boot_clones_ducal_and_runs_the_installer() {
+  fake_ducal_repo "$SANDBOX/repo"
+  DUCAL_REPO="$SANDBOX/repo" bash -s -- --profile dev < "$ROOT/boot.sh" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  [[ -x $HOME/.local/share/ducal/install.sh ]] || fail "ducal not cloned into ~/.local/share/ducal"
+  assert_contains "$STUB_LOG" "install --profile dev"
+}
+
+test_boot_updates_an_existing_copy() {
+  fake_ducal_repo "$SANDBOX/repo"
+  DUCAL_REPO="$SANDBOX/repo" bash < "$ROOT/boot.sh" >/dev/null 2>&1
+  echo new > "$SANDBOX/repo/NEW" && git -C "$SANDBOX/repo" add NEW && git -C "$SANDBOX/repo" -c user.name=t -c user.email=t@t commit -qm new
+  DUCAL_REPO="$SANDBOX/repo" bash < "$ROOT/boot.sh" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  [[ -f $HOME/.local/share/ducal/NEW ]] || fail "existing copy not updated"
+  assert_eq "$(grep -c '^install' "$STUB_LOG")" "2"
+}
+
+test_boot_reports_the_installer_failure() {
+  fake_ducal_repo "$SANDBOX/repo"
+  printf '#!/usr/bin/env bash\nexit 3\n' > "$SANDBOX/repo/install.sh"
+  git -C "$SANDBOX/repo" -c user.name=t -c user.email=t@t commit -qam fail
+  DUCAL_REPO="$SANDBOX/repo" bash < "$ROOT/boot.sh" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "3"
+}
+
 # ---------------------------------------------------------------- groups
 # groups CODE — runs CODE with lib/groups.sh loaded, outside a terminal
 groups() { bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; $1" </dev/null; }

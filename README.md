@@ -31,6 +31,15 @@ use every day. Switch the whole desktop to another palette with a single command
 ## Install
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/yusney/ducal/main/boot.sh | bash
+```
+
+That one line installs git if needed, clones ducal into `~/.local/share/ducal`
+(or updates it) and runs the installer. Pass options after `bash -s --`, for example
+`curl -fsSL https://raw.githubusercontent.com/yusney/ducal/main/boot.sh | bash -s -- --profile dev`.
+Prefer to read it first? Clone and run it yourself:
+
+```bash
 git clone https://github.com/yusney/ducal.git ~/.local/share/ducal
 cd ~/.local/share/ducal
 ./install.sh
@@ -181,6 +190,7 @@ echo 'https://duckduckgo.com/?q=%s' > ~/.config/ducal/search-url
 ## Project layout
 
 ```
+boot.sh           one-line install: clones or updates ducal, then runs install.sh
 install.sh        entry point, runs install/NN-*.sh in order
 install/          one idempotent module per concern
 lib/common.sh     shared helpers (logging, safe linking, colors)
