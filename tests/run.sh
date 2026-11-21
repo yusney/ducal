@@ -284,6 +284,10 @@ test_gnome_module_loads_desktop_settings() {
   assert_contains "$SANDBOX/dconf-loaded" "switch-to-workspace-2=['<Super>2']"
   assert_contains "$SANDBOX/dconf-loaded" "move-to-workspace-4=['<Super><Shift>4']"
   assert_contains "$SANDBOX/dconf-loaded" "switch-to-application-1=@as []"
+  # Super+number never opens apps, even beyond the four workspaces
+  assert_contains "$SANDBOX/dconf-loaded" "switch-to-application-9=@as []"
+  assert_contains "$SANDBOX/dconf-loaded" "app-hotkey-10=@as []"
+  assert_contains "$SANDBOX/dconf-loaded" "app-hotkey-5=@as []"
   assert_contains "$SANDBOX/dconf-loaded" "hot-keys=false"
   assert_contains "$SANDBOX/dconf-loaded" "enable-activate-workspace-shortcuts=false"
   assert_contains "$STUB_LOG" "uuid=space-bar@luchrioh"
