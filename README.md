@@ -17,7 +17,7 @@ use every day. Switch the whole desktop to another palette with a single command
 | Launcher | Search Light on `Super+Space` |
 | Terminal | kitty + fish + Starship, JetBrainsMono Nerd Font |
 | Editor | Neovim with LazyVim, VS Code themed to match |
-| Tools | btop, lazygit, yazi, git, gh, ripgrep, fd |
+| Tools | btop, lazygit, yazi, git, gh, ripgrep, fd, [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) |
 | Themes | Tokyo Night and Gruvbox, switched everywhere with `ducal theme` |
 | System | Themed login screen (GDM) and boot splash (Plymouth), optional |
 
@@ -57,8 +57,9 @@ Installing Docker adds your user to the `docker` group, which grants root-equiva
 access through the Docker daemon.
 
 The system module themes the login screen and the boot splash. It changes system
-files, so it asks first (or set `DUCAL_SYSTEM=yes` / `no`). Add your own logo next
-to the distribution name with `DUCAL_LOGO=/path/to/logo.svg`. Undo it at any time:
+files, so it asks first (or set `DUCAL_SYSTEM=yes` / `no`). Both show the ducal mark,
+a D under a ducal coronet painted in the theme accent, next to the distribution name.
+Use your own logo instead with `DUCAL_LOGO=/path/to/logo.svg`. Undo it at any time:
 
 ```bash
 ducal system restore
@@ -102,7 +103,7 @@ ducal theme                # list themes, current one marked with *
 ducal theme gruvbox        # switch the whole desktop to Gruvbox
 ducal theme tokyo-night    # back to Tokyo Night
 ducal wallpaper ~/me.png   # your own wallpaper, kept across theme switches
-ducal wallpaper reset      # back to each theme's wallpaper
+ducal wallpaper reset      # back to the theme's generated wallpaper
 ducal search tokyo night   # web search in the default browser (Super+B opens a search box)
 ducal system restore       # back to the distribution login screen and boot splash
 ducal cleanup restore-services   # enable the services the cleanup disabled
@@ -110,6 +111,7 @@ ducal cleanup restore-services   # enable the services the cleanup disabled
 
 A theme switch updates kitty (live), fish, Starship, Neovim, yazi, btop, lazygit, VS Code,
 the launcher, notifications, the lock screen, the top bar and the wallpaper.
+Each theme's wallpaper is generated from its palette, with the ducal mark as a watermark.
 Open a new terminal and reopen Neovim to see every change.
 
 ## Keyboard shortcuts
@@ -169,7 +171,7 @@ Then run `ducal theme <name>`.
 - [x] Configuration module and `ducal theme`
 - [x] Applications: base tools plus optional extras
 - [x] GNOME setup (extensions, dock, top bar, Forge, launcher, shortcuts)
-- [x] Theme assets (GTK themes, cursors, icons, wallpapers)
+- [x] Theme assets (GTK themes, cursors, icons) and generated wallpapers
 - [x] Login screen and boot splash, with one-command restore
 - [x] Optional cleanup of preinstalled software you do not need
 - [ ] Screenshots
@@ -187,7 +189,7 @@ touch your real configuration.
 
 ducal stands on the shoulders of these projects:
 
-- [Omarchy](https://github.com/omacom/omarchy) by DHH and contributors: inspiration and wallpapers (MIT)
+- [Omarchy](https://github.com/omacom/omarchy) by DHH and contributors: inspiration (MIT)
 - [Tokyonight](https://github.com/Fausto-Korpsvart/Tokyonight-GTK-Theme) and [Gruvbox](https://github.com/Fausto-Korpsvart/Gruvbox-GTK-Theme) GTK themes by Fausto-Korpsvart (GPL-3.0)
 - [Tela circle icons](https://github.com/vinceliuice/Tela-circle-icon-theme) and [Vimix cursors](https://github.com/vinceliuice/Vimix-cursors) by vinceliuice (GPL-3.0)
 - [tokyonight.nvim](https://github.com/folke/tokyonight.nvim) by folke (Apache-2.0), also the source of the fish and lazygit palettes
@@ -196,7 +198,7 @@ ducal stands on the shoulders of these projects:
 - [Starship](https://starship.rs) presets (ISC)
 - [Forge](https://github.com/forge-ext/forge), [Search Light](https://github.com/icedman/search-light), [Space Bar](https://github.com/christopher-l/space-bar) and other GNOME extensions by their authors
 
-Third-party themes and wallpapers are downloaded at install time and are not
+Third-party themes are downloaded at install time and are not
 redistributed in this repository.
 
 ## License

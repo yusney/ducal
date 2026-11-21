@@ -128,14 +128,15 @@ set_background() {
 # The user's own wallpaper (set with `ducal wallpaper`), if any
 custom_wallpaper() { find "$DUCAL_CONFIG_DIR" -maxdepth 1 -name 'wallpaper.*' 2>/dev/null | head -1; }
 
-# A custom wallpaper wins over the theme's own.
+# apply_wallpaper THEME — a custom wallpaper wins over the theme's own, which is
+# generated from the loaded palette (one file per theme, so GNOME notices the change).
 apply_wallpaper() {
   local file
   file=$(custom_wallpaper)
-  [[ -n $file ]] || file="$DUCAL_DATA_DIR/wallpapers/$WALLPAPER_FILE"
-  if [[ ! -f $file ]]; then
-    note "Wallpaper not downloaded yet: run ./install.sh --only assets"
-    return 0
+  if [[ -z $file ]]; then
+    file="$DUCAL_DATA_DIR/wallpapers/ducal-$1.svg"
+    mkdir -p "$(dirname "$file")"
+    render_template "$DUCAL_ROOT/templates/wallpaper.svg" >"$file"
   fi
   set_background "$file"
 }
@@ -155,7 +156,7 @@ cmd_wallpaper() {
       if [[ -n $theme && -f $THEMES_DIR/$theme/palette.env ]]; then
         # shellcheck source=/dev/null
         source "$THEMES_DIR/$theme/palette.env"
-        apply_wallpaper
+        apply_wallpaper "$theme"
       fi
       log_ok "Back to the theme's wallpaper"
       ;;
@@ -194,7 +195,7 @@ cmd_theme() {
   apply_workspace_bar
   apply_gtk
   apply_shell
-  apply_wallpaper
+  apply_wallpaper "$name"
   mkdir -p "$DUCAL_CONFIG_DIR"
   echo "$name" >"$CURRENT_FILE"
   log_ok "$NAME is active. Open a new terminal and reopen Neovim to see every change."

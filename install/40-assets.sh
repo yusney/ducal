@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Module: assets — GTK themes, icons, cursors and wallpapers, then the default theme.
+# Module: assets — GTK themes, icons and cursors, then the default theme.
 # Third-party assets are downloaded from their upstream projects, never redistributed.
 # Sourced by install.sh (DUCAL_ROOT and lib/common.sh are already loaded).
 
@@ -52,18 +52,6 @@ fi
 mkdir -p "$HOME/.icons/default"
 printf '[Icon Theme]\nInherits=Vimix-white-cursors\n' >"$HOME/.icons/default/index.theme"
 log_ok "Cursors ready"
-
-# Wallpapers declared by each theme (Omarchy, MIT)
-mkdir -p "$DUCAL_DATA_DIR/wallpapers"
-for palette in "$DUCAL_ROOT"/themes/*/palette.env; do
-  (
-    # shellcheck source=/dev/null
-    source "$palette"
-    dest="$DUCAL_DATA_DIR/wallpapers/$WALLPAPER_FILE"
-    [[ -s $dest ]] || download "$WALLPAPER_URL" "$dest"
-  )
-done
-log_ok "Wallpapers ready"
 
 # First install: apply the default theme. Later runs keep the user's choice.
 if [[ ! -f $DUCAL_CONFIG_DIR/current ]]; then

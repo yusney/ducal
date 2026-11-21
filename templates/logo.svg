@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 4 64 92">
+  <!-- ducal mark: a D under a three-point ducal coronet, in the theme accent -->
+  <g id="ducal-mark" fill="{{ACCENT}}">
+    <path d="M24 33 V14 L37 24 L50 8 L63 24 L76 14 V33 Z"/>
+    <path fill-rule="evenodd" d="M24 39 H50 A26 26 0 0 1 50 91 H24 Z M36 51 H50 A14 14 0 0 1 50 79 H36 Z"/>
+  </g>
+</svg>

@@ -181,12 +181,32 @@ test_parse_extras_rejects_unknown_names() {
 test_apps_module_skips_tools_already_installed() {
   stub_package_tools
   printf '%s\n' git curl unzip fontconfig build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
-  for c in kitty nvim starship lazygit yazi ya fd; do fake_cmd "$c"; done
+  for c in kitty nvim starship lazygit yazi ya fd claude; do fake_cmd "$c"; done
   mkdir -p "$HOME/.local/share/fonts/JetBrainsMonoNerd"
   DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
   assert_not_contains "$STUB_LOG" "curl"
   assert_not_contains "$STUB_LOG" "apt-get install"
+}
+
+test_claude_is_skipped_when_already_installed() {
+  stub_package_tools
+  fake_cmd claude
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_claude" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "curl"
+}
+
+test_claude_uses_the_official_installer_when_missing() {
+  stub_package_tools
+  # The installer script served by the curl stub only records that it ran
+  printf '#!/usr/bin/env bash\necho "curl $*" >> "%s"\necho "echo claude-installer-ran >> %s"\n' "$STUB_LOG" "$STUB_LOG" > "$SANDBOX/stubs/curl"
+  chmod +x "$SANDBOX/stubs/curl"
+  # Keep any real claude on the host PATH out of the sandbox
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_claude" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "curl -fsSL https://claude.ai/install.sh"
+  assert_contains "$STUB_LOG" "claude-installer-ran"
 }
 
 # Stub fnm binary at $1 that logs its calls.
@@ -378,7 +398,7 @@ EOF
   chmod +x "$s/git" "$s/curl"
 }
 
-test_assets_module_installs_themes_icons_cursors_and_wallpapers() {
+test_assets_module_installs_themes_icons_and_cursors() {
   stub_asset_tools
   "$ROOT/install.sh" --only assets >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
@@ -387,18 +407,13 @@ test_assets_module_installs_themes_icons_cursors_and_wallpapers() {
   assert_contains "$STUB_LOG" "upstream-install Tela-circle-icon-theme"
   assert_contains "$HOME/.icons/Vimix-white-cursors/index.theme" "cursor"
   assert_contains "$HOME/.icons/default/index.theme" "Inherits=Vimix-white-cursors"
-  local w="$HOME/.local/share/ducal/wallpapers"
-  [[ -s $w/omarchy-tokyo-liftoff.webp && -s $w/omarchy-gruvbox-backwater.jpg ]] || fail "wallpapers missing: $(ls "$w" 2>&1)"
   assert_eq "$(cat "$HOME/.config/ducal/current" 2>/dev/null)" "tokyo-night" "default theme applied"
 }
 
 test_assets_module_skips_what_is_already_installed() {
   stub_asset_tools
   mkdir -p "$HOME/.themes/Tokyonight-Dark" "$HOME/.themes/Gruvbox-Dark" "$HOME/.local/share/icons/Tela-circle-dark" \
-    "$HOME/.icons/Vimix-white-cursors" "$HOME/.local/share/ducal/wallpapers" "$HOME/.config/ducal"
-  # Non-empty: an empty file counts as an interrupted download and is fetched again
-  echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-tokyo-liftoff.webp"
-  echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
+    "$HOME/.icons/Vimix-white-cursors" "$HOME/.config/ducal"
   echo gruvbox > "$HOME/.config/ducal/current"
   "$ROOT/install.sh" --only assets >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
@@ -451,6 +466,7 @@ test_system_install_with_logo_themes_login_and_boot() {
   assert_contains "$STUB_LOG" "update-alternatives --set gdm-theme.gresource $r/usr/share/gnome-shell/theme/ducal/gnome-shell-theme.gresource"
   assert_contains "$r/etc/gdm3/greeter.dconf-defaults" "logo='$r/usr/share/pixmaps/ducal-logo.svg'"
   assert_contains "$r/usr/share/pixmaps/ducal-logo.svg" "24.04.5 LTS"
+  assert_not_contains "$r/usr/share/pixmaps/ducal-logo.svg" 'id="ducal-mark"' "DUCAL_LOGO replaces the ducal mark"
   assert_contains "$r/etc/gdm3/greeter.dconf-defaults.ducal-logo-line" "#logo='/x.png'"
   assert_contains "$STUB_LOG" "dpkg-reconfigure gdm3"
   local p="$r/usr/share/plymouth/themes/ducal"
@@ -461,12 +477,18 @@ test_system_install_with_logo_themes_login_and_boot() {
   assert_contains "$STUB_LOG" "update-initramfs -u"
 }
 
-test_system_install_without_logo_keeps_distro_logo() {
+test_system_install_without_logo_uses_the_ducal_mark() {
   setup_sysroot
   DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
-  assert_not_contains "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "ducal-logo"
-  [[ ! -e $DUCAL_SYSROOT/usr/share/plymouth/themes/ducal/watermark.png ]] || fail "no watermark expected"
+  local r=$DUCAL_SYSROOT
+  assert_contains "$r/etc/gdm3/greeter.dconf-defaults" "logo='$r/usr/share/pixmaps/ducal-logo.svg'"
+  # The mark is painted with the active theme's accent, next to the distribution name
+  assert_contains "$r/usr/share/pixmaps/ducal-logo.svg" 'id="ducal-mark"'
+  assert_contains "$r/usr/share/pixmaps/ducal-logo.svg" 'fill="#7aa2f7"'
+  assert_contains "$r/usr/share/pixmaps/ducal-logo.svg" "24.04.5 LTS"
+  assert_not_contains "$r/usr/share/pixmaps/ducal-logo.svg" "{{"
+  [[ -s $r/usr/share/plymouth/themes/ducal/watermark.png ]] || fail "boot splash watermark missing"
 }
 
 test_system_install_twice_keeps_the_original_logo_line() {
@@ -487,13 +509,61 @@ test_system_logo_with_namespaced_svg_is_composed() {
     fail "composed logo is not valid XML"
 }
 
-test_system_reinstall_without_logo_removes_the_logo() {
+test_system_reinstall_without_logo_goes_back_to_the_ducal_mark() {
   setup_sysroot
   DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/logo.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1
   DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1
-  assert_not_contains "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "ducal-logo"
-  assert_contains "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "#logo='/x.png'"
-  [[ ! -e $DUCAL_SYSROOT/usr/share/pixmaps/ducal-logo.svg ]] || fail "logo file left behind"
+  local r=$DUCAL_SYSROOT
+  assert_contains "$r/usr/share/pixmaps/ducal-logo.svg" 'id="ducal-mark"'
+  assert_eq "$(grep -c 'logo=' "$r/etc/gdm3/greeter.dconf-defaults")" "1"
+  # The distribution's original line is still the one restore puts back
+  assert_contains "$r/etc/gdm3/greeter.dconf-defaults.ducal-logo-line" "#logo='/x.png'"
+  "$ROOT/bin/ducal" system restore >/dev/null 2>&1
+  assert_contains "$r/etc/gdm3/greeter.dconf-defaults" "#logo='/x.png'"
+  [[ ! -e $r/usr/share/pixmaps/ducal-logo.svg ]] || fail "logo file left behind after restore"
+}
+
+test_system_restore_puts_back_an_active_distro_logo_line() {
+  setup_sysroot
+  local r=$DUCAL_SYSROOT g="$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults"
+  printf '[org/gnome/login-screen]\nlogo=%s\n' "'/usr/share/pixmaps/distro.png'" > "$g"
+  DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/logo.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1
+  DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1
+  "$ROOT/bin/ducal" system restore >/dev/null 2>&1
+  assert_eq "$(grep 'logo=' "$g")" "logo='/usr/share/pixmaps/distro.png'"
+  [[ ! -e $r/usr/share/pixmaps/ducal-logo.svg && ! -e $g.ducal-logo-line ]] || fail "ducal files left behind"
+}
+
+test_system_install_with_a_missing_logo_changes_nothing() {
+  setup_sysroot
+  cp "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "$SANDBOX/greeter.before"
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/nope.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1; local rc=$?
+  [[ $rc -ne 0 ]] || fail "expected a failure"
+  cmp -s "$SANDBOX/greeter.before" "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" || fail "greeter changed"
+  assert_not_contains "$STUB_LOG" "update-alternatives"
+  assert_not_contains "$STUB_LOG" "update-initramfs"
+}
+
+test_system_restore_cleans_up_after_an_interrupted_install() {
+  setup_sysroot
+  local r=$DUCAL_SYSROOT
+  # The install stopped after saving the original line and the logo, before editing the greeter
+  mkdir -p "$r/usr/share/pixmaps"
+  echo '<svg/>' > "$r/usr/share/pixmaps/ducal-logo.svg"
+  echo "#logo='/x.png'" > "$r/etc/gdm3/greeter.dconf-defaults.ducal-logo-line"
+  "$ROOT/bin/ducal" system restore >/dev/null 2>&1
+  [[ ! -e $r/usr/share/pixmaps/ducal-logo.svg && ! -e $r/etc/gdm3/greeter.dconf-defaults.ducal-logo-line ]] || fail "ducal files left behind"
+  assert_contains "$r/etc/gdm3/greeter.dconf-defaults" "#logo='/x.png'"
+}
+
+test_system_boot_watermark_is_640px_wide() {
+  setup_sysroot
+  DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1
+  local w
+  w=$(python3 -c "import struct,sys; d=open(sys.argv[1],'rb').read(24); print(struct.unpack('>I', d[16:20])[0])" \
+    "$DUCAL_SYSROOT/usr/share/plymouth/themes/ducal/watermark.png" 2>/dev/null)
+  assert_eq "$w" "640"
 }
 
 test_system_logo_line_is_added_when_missing() {
@@ -674,24 +744,34 @@ test_wallpaper_sets_a_copy_of_the_image() {
 
 test_theme_switch_keeps_the_custom_wallpaper() {
   make_png "$SANDBOX/mine.png"
-  mkdir -p "$HOME/.local/share/ducal/wallpapers"; echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
   "$ROOT/bin/ducal" wallpaper "$SANDBOX/mine.png" >/dev/null 2>&1
   : > "$STUB_LOG"
   "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1
   assert_contains "$STUB_LOG" "picture-uri-dark file://$HOME/.config/ducal/wallpaper.png"
-  assert_not_contains "$STUB_LOG" "backwater"
+  assert_not_contains "$STUB_LOG" "ducal-gruvbox.svg"
+}
+
+test_theme_uses_a_wallpaper_generated_from_its_palette() {
+  "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  local w="$HOME/.local/share/ducal/wallpapers/ducal-gruvbox.svg"
+  assert_contains "$w" 'fill="#282828"'
+  assert_contains "$w" 'id="ducal-mark"'
+  assert_contains "$w" 'fill="#7daea3"'
+  assert_not_contains "$w" "{{"
+  python3 -c "import sys; from xml.dom import minidom; minidom.parse(sys.argv[1])" "$w" 2>/dev/null || fail "wallpaper is not valid SVG"
+  assert_contains "$STUB_LOG" "gsettings set org.gnome.desktop.background picture-uri-dark file://$w"
 }
 
 test_wallpaper_reset_returns_to_the_theme_wallpaper() {
   make_png "$SANDBOX/mine.png"
-  mkdir -p "$HOME/.local/share/ducal/wallpapers"; echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
   "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1
   "$ROOT/bin/ducal" wallpaper "$SANDBOX/mine.png" >/dev/null 2>&1
   : > "$STUB_LOG"
   "$ROOT/bin/ducal" wallpaper reset >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
   [[ ! -e $HOME/.config/ducal/wallpaper.png ]] || fail "custom wallpaper should be removed"
-  assert_contains "$STUB_LOG" "picture-uri-dark file://$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
+  assert_contains "$STUB_LOG" "picture-uri-dark file://$HOME/.local/share/ducal/wallpapers/ducal-gruvbox.svg"
 }
 
 test_wallpaper_rejects_missing_and_non_image_files() {

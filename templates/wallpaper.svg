@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" preserveAspectRatio="xMidYMid slice">
+  <!-- ducal wallpaper: the theme background with a soft glow and the ducal mark as a watermark -->
+  <defs>
+    <radialGradient id="glow" cx="1500" cy="640" r="1100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="{{BG_ALT}}"/>
+      <stop offset="1" stop-color="{{BG}}"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="{{BG}}"/>
+  <rect width="1920" height="1080" fill="url(#glow)"/>
+  <g transform="translate(1250 250) scale(8) translate(-18 -4)" opacity="0.07">
+    <g id="ducal-mark" fill="{{ACCENT}}">
+      <path d="M24 33 V14 L37 24 L50 8 L63 24 L76 14 V33 Z"/>
+      <path fill-rule="evenodd" d="M24 39 H50 A26 26 0 0 1 50 91 H24 Z M36 51 H50 A14 14 0 0 1 50 79 H36 Z"/>
+    </g>
+  </g>
+</svg>

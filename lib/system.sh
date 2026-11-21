@@ -112,9 +112,12 @@ greeter_apply() {
 
 # greeter_remove_logo WORK_DIR — puts back the distribution logo line, if ducal set one.
 greeter_remove_logo() {
-  grep -qxF "logo='$LOGO_DEST'" "$GREETER" 2>/dev/null || return 0
-  greeter_edit unset "$GREETER" "$LOGO_DEST" >"$1/greeter"
-  greeter_apply "$1/greeter"
+  if grep -qxF "logo='$LOGO_DEST'" "$GREETER" 2>/dev/null; then
+    greeter_edit unset "$GREETER" "$LOGO_DEST" >"$1/greeter"
+    greeter_apply "$1/greeter"
+  fi
+  # Also after an install that stopped before editing the greeter: the original
+  # line is then still in place, so the saved copy is no longer needed.
   as_root rm -f "$LOGO_DEST" "$GREETER_SAVED_LINE"
 }
 
@@ -196,6 +199,7 @@ install_plymouth_dir() {
 }
 
 # system_install [LOGO_SVG] — needs a theme palette loaded in the environment.
+# Without LOGO_SVG the ducal mark is used, painted with the theme accent.
 # Everything is built first; the system is only changed once every piece is ready.
 system_install() {
   local logo=${1:-} work
@@ -203,29 +207,27 @@ system_install() {
 
   log_step "Building the login screen and boot splash"
   build_gdm_resource "$work/gnome-shell-theme.gresource"
-  if [[ -n $logo ]]; then
-    [[ -f $logo ]] || die "Logo not found: $logo"
-    compose_logo "$logo" "$work/logo.svg"
-    svg_to_png "$work/logo.svg" "$work/watermark.png" 640
+  if [[ -z $logo ]]; then
+    logo="$work/ducal-mark.svg"
+    render_template "$DUCAL_ROOT/templates/logo.svg" >"$logo"
   fi
-  build_plymouth_theme "$work/plymouth" "${logo:+$work/watermark.png}"
+  [[ -f $logo ]] || die "Logo not found: $logo"
+  compose_logo "$logo" "$work/logo.svg"
+  svg_to_png "$work/logo.svg" "$work/watermark.png" 640
+  build_plymouth_theme "$work/plymouth" "$work/watermark.png"
 
   log_step "Login screen"
   as_root install -D -m 644 "$work/gnome-shell-theme.gresource" "$GDM_RESOURCE"
   as_root update-alternatives --install "$SYSROOT/usr/share/gnome-shell/gdm-theme.gresource" gdm-theme.gresource "$GDM_RESOURCE" 20
   as_root update-alternatives --set gdm-theme.gresource "$GDM_RESOURCE"
-  if [[ -n $logo ]]; then
-    if [[ ! -f $GREETER_SAVED_LINE ]]; then
-      greeter_edit get "$GREETER" >"$work/saved-line"
-      as_root install -m 644 "$work/saved-line" "$GREETER_SAVED_LINE"
-    fi
-    as_root install -D -m 644 "$work/logo.svg" "$LOGO_DEST"
-    greeter_edit set "$GREETER" "$LOGO_DEST" >"$work/greeter"
-    grep -qxF "logo='$LOGO_DEST'" "$work/greeter" || die "Could not set the logo in $GREETER"
-    greeter_apply "$work/greeter"
-  else
-    greeter_remove_logo "$work"
+  if [[ ! -f $GREETER_SAVED_LINE ]]; then
+    greeter_edit get "$GREETER" >"$work/saved-line"
+    as_root install -m 644 "$work/saved-line" "$GREETER_SAVED_LINE"
   fi
+  as_root install -D -m 644 "$work/logo.svg" "$LOGO_DEST"
+  greeter_edit set "$GREETER" "$LOGO_DEST" >"$work/greeter"
+  grep -qxF "logo='$LOGO_DEST'" "$work/greeter" || die "Could not set the logo in $GREETER"
+  greeter_apply "$work/greeter"
   log_ok "Login screen themed (log out to see it)"
 
   log_step "Boot splash"

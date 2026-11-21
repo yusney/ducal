@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Module: system — themed login screen (GDM) and boot splash (Plymouth). Optional.
 #   DUCAL_SYSTEM=yes|no   answer the confirmation in advance (default: ask; no without a terminal)
-#   DUCAL_LOGO=/path.svg  optional logo shown with the distribution name and version
+#   DUCAL_LOGO=/path.svg  your own logo instead of the ducal mark (shown with the distribution name and version)
 # Undo at any time with: ducal system restore
 # Sourced by install.sh (DUCAL_ROOT and lib/common.sh are already loaded).
 
