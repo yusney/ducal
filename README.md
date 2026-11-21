@@ -53,6 +53,12 @@ Node.js LTS, and adds the default version to the session `PATH`
 terminal, such as editors and AI agents, find `node`, `npx` and global npm tools.
 Log out and back in to apply it. Switch versions with `fnm default <version>`.
 
+It also installs [ccstatusline](https://github.com/sirmalloc/ccstatusline), and the
+`config` module gives Claude Code a Tokyo Night status line: model, context used,
+folder, git branch and changes, session time and cost, 5-hour usage and time to reset.
+The layout lives in `~/.config/ccstatusline/settings.json` (run `ccstatusline` to
+edit it). A status line you already set in `~/.claude/settings.json` is kept.
+
 Installing Docker adds your user to the `docker` group, which grants root-equivalent
 access through the Docker daemon.
 
