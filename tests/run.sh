@@ -198,6 +198,16 @@ test_theme_apply_colors_the_workspace_bar() {
   assert_contains "$STUB_LOG" "dconf write $p/empty-workspace-text-color '#7c6f64'"
 }
 
+test_keys_shows_the_shortcut_guide() {
+  local out
+  out=$("$ROOT/bin/ducal" keys); local rc=$?
+  assert_eq "$rc" "0"
+  local k
+  for k in "Super+Q" "Super+Space" "Super+B" "Super+Shift+1" "Ctrl+Alt+L" "Ctrl+Alt+T" "Super+C" "Ctrl+Shift+Enter"; do
+    [[ $out == *"$k"* ]] || fail "guide misses $k"
+  done
+}
+
 test_theme_apply_sets_yazi_flavor() {
   "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1
   assert_contains "$HOME/.config/yazi/theme.toml" 'dark = "gruvbox-dark"'
@@ -291,6 +301,12 @@ test_gnome_module_loads_desktop_settings() {
   # Super+Q closes windows (Alt+F4 still works); the dock no longer reserves it
   assert_contains "$SANDBOX/dconf-loaded" "close=['<Super>q', '<Alt>F4']"
   assert_contains "$SANDBOX/dconf-loaded" "shortcut=@as []"
+  # GNOME vs Forge clashes resolved: Super+V and Ctrl+Alt+D go to Forge,
+  # Ctrl+Alt+T opens the terminal and Forge's right two-thirds moves to Ctrl+Alt+R
+  assert_contains "$SANDBOX/dconf-loaded" "toggle-message-tray=['<Super>m']"
+  assert_contains "$SANDBOX/dconf-loaded" "show-desktop=['<Primary><Super>d', '<Super>d']"
+  assert_contains "$SANDBOX/dconf-loaded" "window-snap-two-third-right=['<Ctrl><Alt>r']"
+  assert_contains "$STUB_LOG" "gsettings set org.gnome.desktop.default-applications.terminal exec $HOME/.local/bin/kitty"
   assert_contains "$SANDBOX/dconf-loaded" "hot-keys=false"
   assert_contains "$SANDBOX/dconf-loaded" "enable-activate-workspace-shortcuts=false"
   assert_contains "$STUB_LOG" "uuid=space-bar@luchrioh"

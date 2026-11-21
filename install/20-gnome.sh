@@ -22,3 +22,7 @@ log_ok "Desktop settings applied"
 
 add_custom_keybinding ducal-search "Search the web" "$HOME/.local/bin/ducal search" "<Super>b"
 log_ok "Super+B opens a web search box"
+
+# Ctrl+Alt+T opens kitty instead of GNOME Terminal
+gsettings set org.gnome.desktop.default-applications.terminal exec "$HOME/.local/bin/kitty"
+log_ok "Ctrl+Alt+T opens kitty"

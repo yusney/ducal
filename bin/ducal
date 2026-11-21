@@ -5,6 +5,7 @@
 #   ducal wallpaper <image>         use your own wallpaper with every theme
 #   ducal wallpaper reset           go back to each theme's wallpaper
 #   ducal search [text]             search the web or open an address (Super+B)
+#   ducal keys                      show every keyboard shortcut
 #   ducal system restore            restore the distribution login screen and boot splash
 #   ducal cleanup restore-services  enable the services the cleanup disabled
 #   ducal help                      show this help
@@ -22,7 +23,7 @@ FALLBACK_GTK="Tokyonight-Dark"
 notes=()
 note() { notes+=("$1"); }
 
-usage() { sed -n '2,10p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,11p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
 
 current_theme() { [[ -f $CURRENT_FILE ]] && cat "$CURRENT_FILE"; }
 
@@ -226,6 +227,12 @@ cmd_search() {
   xdg-open "$(search_target "$text")" >/dev/null 2>&1
 }
 
+# ducal keys — the shortcut guide, without Markdown table syntax.
+cmd_keys() {
+  sed -E -e '/^\| *(---|Shortcut) /d' -e 's/^\| *//; s/ *\|$//; s/ *\| */  →  /' -e 's/`//g' \
+    "$DUCAL_ROOT/docs/keybindings.md"
+}
+
 cmd_system() {
   case ${1:-} in
     restore)
@@ -258,6 +265,7 @@ case ${1:-help} in
   theme) shift; cmd_theme "$@" ;;
   wallpaper) shift; cmd_wallpaper "$@" ;;
   search) shift; cmd_search "$@" ;;
+  keys) cmd_keys ;;
   cleanup) shift; cmd_cleanup "$@" ;;
   system) shift; cmd_system "$@" ;;
   help | -h | --help) usage ;;

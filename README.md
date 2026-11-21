@@ -108,19 +108,20 @@ Open a new terminal and reopen Neovim to see every change.
 
 ## Keyboard shortcuts
 
+The essentials. See the [full guide](docs/keybindings.md), or run `ducal keys`.
+
 | Shortcut | Action |
 | --- | --- |
 | `Super+Space` | Launcher |
 | `Super+B` | Search the web (or open an address) in your default browser |
-| `Super+H/J/K/L` | Focus window left / down / up / right (Forge) |
-| `Ctrl+Super+H/J/K/L` | Swap window |
-| `Shift+Super+H/J/K/L` | Move window |
-| `Super+C` | Toggle floating window |
+| `Ctrl+Alt+T` | Terminal (kitty) |
+| `Super+Q` | Close the window (`Alt+F4` also works) |
 | `Super+1…4` | Go to workspace 1–4 |
 | `Super+Shift+1…4` | Send the window to workspace 1–4 |
-| `Super+Q` | Close the window (`Alt+F4` also works) |
+| `Super+H/J/K/L` | Focus window left / down / up / right (Forge) |
+| `Ctrl+Super+H/J/K/L` | Swap window |
+| `Super+C` | Toggle floating window |
 | `Ctrl+Alt+L` | Lock screen |
-| `Shift+Super+Space` | Switch keyboard layout |
 
 ducal moves the lock screen to `Ctrl+Alt+L` and frees `Super+H` because Forge uses
 `Super+H/J/K/L` for focus. It also disables Ubuntu Dock, Tiling Assistant and the
