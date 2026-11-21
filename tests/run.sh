@@ -92,6 +92,17 @@ test_theme_apply_switches_every_target() {
   assert_not_contains "$HOME/.themes/Ducal/gnome-shell/gnome-shell.css" '{{'
 }
 
+test_theme_apply_without_gnome_only_themes_the_terminal() {
+  rm -f "$SANDBOX/stubs/gsettings" "$SANDBOX/stubs/dconf"
+  LC_ALL=C PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_NO_GNOME=1 "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  assert_eq "$rc" "0"
+  assert_link "$HOME/.config/starship.toml" "$ROOT/themes/gruvbox/starship.toml"
+  assert_link "$HOME/.config/fish/conf.d/ducal-theme.fish" "$ROOT/themes/gruvbox/fish.fish"
+  assert_not_contains "$SANDBOX/err" "not found"
+  [[ ! -d $HOME/.local/share/ducal/wallpapers ]] || fail "wallpaper generated without GNOME"
+  [[ ! -e $HOME/.themes/Ducal ]] || fail "shell theme written without GNOME"
+}
+
 test_theme_apply_twice_is_idempotent() {
   "$ROOT/bin/ducal" theme tokyo-night >/dev/null 2>&1
   "$ROOT/bin/ducal" theme tokyo-night >/dev/null 2>&1; local rc=$?

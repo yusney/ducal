@@ -14,6 +14,8 @@ set -uo pipefail
 DUCAL_ROOT=${DUCAL_ROOT:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}
 # shellcheck source=../lib/common.sh
 source "$DUCAL_ROOT/lib/common.sh"
+# shellcheck source=../lib/groups.sh
+source "$DUCAL_ROOT/lib/groups.sh"
 
 THEMES_DIR="$DUCAL_ROOT/themes"
 CURRENT_FILE="$DUCAL_CONFIG_DIR/current"
@@ -24,6 +26,9 @@ notes=()
 note() { notes+=("$1"); }
 
 usage() { sed -n '2,11p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
+
+# A GNOME session to theme: not on WSL or a server (DUCAL_NO_GNOME=1 forces it off)
+has_gnome() { [[ -z ${DUCAL_NO_GNOME:-} ]] && ! is_wsl && has_cmd gsettings && has_cmd dconf; }
 
 current_theme() { [[ -f $CURRENT_FILE ]] && cat "$CURRENT_FILE"; }
 
@@ -191,11 +196,13 @@ cmd_theme() {
   apply_yazi
   apply_btop
   apply_vscode
-  apply_launcher
-  apply_workspace_bar
-  apply_gtk
-  apply_shell
-  apply_wallpaper "$name"
+  if has_gnome; then
+    apply_launcher
+    apply_workspace_bar
+    apply_gtk
+    apply_shell
+    apply_wallpaper "$name"
+  fi
   mkdir -p "$DUCAL_CONFIG_DIR"
   echo "$name" >"$CURRENT_FILE"
   log_ok "$NAME is active. Open a new terminal and reopen Neovim to see every change."
