@@ -8,6 +8,7 @@ DUCAL_EXTENSIONS=(
   just-perfection-desktop@just-perfection              # slim top bar
   search-light@icedman.github.com                      # launcher on Super+Space
   forge@jmmaranan.com                                  # tiling windows
+  space-bar@luchrioh                                   # numbered workspaces in the top bar
 )
 
 # Ubuntu defaults that clash with the ducal setup

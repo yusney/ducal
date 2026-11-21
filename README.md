@@ -13,7 +13,7 @@ use every day. Switch the whole desktop to another palette with a single command
 
 | Area | Setup |
 | --- | --- |
-| Desktop | GNOME with matching GTK and shell themes, Tela icons, Vimix cursors, tiling via Forge, hidden dock, slim top bar |
+| Desktop | GNOME with matching GTK and shell themes, Tela icons, Vimix cursors, tiling via Forge, hidden dock, slim top bar with numbered workspaces |
 | Launcher | Search Light on `Super+Space` |
 | Terminal | kitty + fish + Starship, JetBrainsMono Nerd Font |
 | Editor | Neovim with LazyVim, VS Code themed to match |
@@ -116,12 +116,15 @@ Open a new terminal and reopen Neovim to see every change.
 | `Ctrl+Super+H/J/K/L` | Swap window |
 | `Shift+Super+H/J/K/L` | Move window |
 | `Super+C` | Toggle floating window |
+| `Super+1…4` | Go to workspace 1–4 |
+| `Super+Shift+1…4` | Send the window to workspace 1–4 |
 | `Ctrl+Alt+L` | Lock screen |
 | `Shift+Super+Space` | Switch keyboard layout |
 
 ducal moves the lock screen to `Ctrl+Alt+L` and frees `Super+H` because Forge uses
 `Super+H/J/K/L` for focus. It also disables Ubuntu Dock, Tiling Assistant and the
-desktop icons, which clash with this setup.
+desktop icons, which clash with this setup. There are four fixed workspaces, shown
+as numbers in the top bar (Space Bar extension) with the active one highlighted.
 
 ## Web search
 
@@ -183,7 +186,7 @@ ducal stands on the shoulders of these projects:
 - [tokyo-night.yazi](https://github.com/BennyOe/tokyo-night.yazi) and [gruvbox-dark.yazi](https://github.com/bennyyip/gruvbox-dark.yazi) flavors
 - [gruvbox.nvim](https://github.com/ellisonleao/gruvbox.nvim) by ellisonleao (MIT)
 - [Starship](https://starship.rs) presets (ISC)
-- [Forge](https://github.com/forge-ext/forge), [Search Light](https://github.com/icedman/search-light) and other GNOME extensions by their authors
+- [Forge](https://github.com/forge-ext/forge), [Search Light](https://github.com/icedman/search-light), [Space Bar](https://github.com/christopher-l/space-bar) and other GNOME extensions by their authors
 
 Third-party themes and wallpapers are downloaded at install time and are not
 redistributed in this repository.

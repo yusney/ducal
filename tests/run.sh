@@ -189,6 +189,15 @@ test_apps_module_skips_tools_already_installed() {
   assert_not_contains "$STUB_LOG" "apt-get install"
 }
 
+test_theme_apply_colors_the_workspace_bar() {
+  "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1
+  local p=/org/gnome/shell/extensions/space-bar/appearance
+  assert_contains "$STUB_LOG" "dconf write $p/active-workspace-background-color '#7daea3'"
+  assert_contains "$STUB_LOG" "dconf write $p/active-workspace-text-color '#282828'"
+  assert_contains "$STUB_LOG" "dconf write $p/inactive-workspace-text-color '#d4be98'"
+  assert_contains "$STUB_LOG" "dconf write $p/empty-workspace-text-color '#7c6f64'"
+}
+
 test_theme_apply_sets_yazi_flavor() {
   "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1
   assert_contains "$HOME/.config/yazi/theme.toml" 'dark = "gruvbox-dark"'
@@ -246,7 +255,7 @@ test_gnome_module_installs_only_missing_extensions() {
   assert_contains "$STUB_LOG" "uuid=blur-my-shell@aunetx&shell_version=46"
   assert_not_contains "$STUB_LOG" "uuid=forge@jmmaranan.com"
   assert_not_contains "$STUB_LOG" "uuid=dash-to-dock@micxgx.gmail.com"
-  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "4" "4 missing extensions"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "5" "5 missing extensions"
 }
 
 test_gnome_module_enables_ours_and_keeps_user_extensions() {
@@ -270,6 +279,14 @@ test_gnome_module_loads_desktop_settings() {
   assert_contains "$SANDBOX/dconf-loaded" "screensaver=['<Control><Alt>l']"
   assert_contains "$SANDBOX/dconf-loaded" "[org/gnome/shell/extensions/dash-to-dock]"
   assert_not_contains "$SANDBOX/dconf-loaded" "DP-4"
+  # Numbered workspaces: Super+N goes there, Super+Shift+N sends the window
+  assert_contains "$SANDBOX/dconf-loaded" "dynamic-workspaces=false"
+  assert_contains "$SANDBOX/dconf-loaded" "switch-to-workspace-2=['<Super>2']"
+  assert_contains "$SANDBOX/dconf-loaded" "move-to-workspace-4=['<Super><Shift>4']"
+  assert_contains "$SANDBOX/dconf-loaded" "switch-to-application-1=@as []"
+  assert_contains "$SANDBOX/dconf-loaded" "hot-keys=false"
+  assert_contains "$SANDBOX/dconf-loaded" "enable-activate-workspace-shortcuts=false"
+  assert_contains "$STUB_LOG" "uuid=space-bar@luchrioh"
 }
 
 # ---------------------------------------------------------------- assets

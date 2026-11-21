@@ -53,6 +53,14 @@ apply_yazi() {
     "$YAZI_FLAVOR" >"$HOME/.config/yazi/theme.toml"
 }
 
+apply_workspace_bar() {
+  local p=/org/gnome/shell/extensions/space-bar/appearance
+  dconf write $p/active-workspace-background-color "'$ACCENT'"
+  dconf write $p/active-workspace-text-color "'$BG'"
+  dconf write $p/inactive-workspace-text-color "'$FG'"
+  dconf write $p/empty-workspace-text-color "'$MUTED'"
+}
+
 apply_btop() {
   local conf="$HOME/.config/btop/btop.conf" theme="/usr/share/btop/themes/$BTOP_THEME.theme"
   [[ -f $conf ]] || return 0
@@ -179,6 +187,7 @@ cmd_theme() {
   apply_btop
   apply_vscode
   apply_launcher
+  apply_workspace_bar
   apply_gtk
   apply_shell
   apply_wallpaper
