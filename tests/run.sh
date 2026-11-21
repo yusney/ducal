@@ -398,7 +398,7 @@ EOF
   chmod +x "$s/git" "$s/curl"
 }
 
-test_assets_module_installs_themes_icons_cursors_and_wallpapers() {
+test_assets_module_installs_themes_icons_and_cursors() {
   stub_asset_tools
   "$ROOT/install.sh" --only assets >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
@@ -407,18 +407,13 @@ test_assets_module_installs_themes_icons_cursors_and_wallpapers() {
   assert_contains "$STUB_LOG" "upstream-install Tela-circle-icon-theme"
   assert_contains "$HOME/.icons/Vimix-white-cursors/index.theme" "cursor"
   assert_contains "$HOME/.icons/default/index.theme" "Inherits=Vimix-white-cursors"
-  local w="$HOME/.local/share/ducal/wallpapers"
-  [[ -s $w/omarchy-tokyo-liftoff.webp && -s $w/omarchy-gruvbox-backwater.jpg ]] || fail "wallpapers missing: $(ls "$w" 2>&1)"
   assert_eq "$(cat "$HOME/.config/ducal/current" 2>/dev/null)" "tokyo-night" "default theme applied"
 }
 
 test_assets_module_skips_what_is_already_installed() {
   stub_asset_tools
   mkdir -p "$HOME/.themes/Tokyonight-Dark" "$HOME/.themes/Gruvbox-Dark" "$HOME/.local/share/icons/Tela-circle-dark" \
-    "$HOME/.icons/Vimix-white-cursors" "$HOME/.local/share/ducal/wallpapers" "$HOME/.config/ducal"
-  # Non-empty: an empty file counts as an interrupted download and is fetched again
-  echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-tokyo-liftoff.webp"
-  echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
+    "$HOME/.icons/Vimix-white-cursors" "$HOME/.config/ducal"
   echo gruvbox > "$HOME/.config/ducal/current"
   "$ROOT/install.sh" --only assets >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
@@ -706,24 +701,34 @@ test_wallpaper_sets_a_copy_of_the_image() {
 
 test_theme_switch_keeps_the_custom_wallpaper() {
   make_png "$SANDBOX/mine.png"
-  mkdir -p "$HOME/.local/share/ducal/wallpapers"; echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
   "$ROOT/bin/ducal" wallpaper "$SANDBOX/mine.png" >/dev/null 2>&1
   : > "$STUB_LOG"
   "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1
   assert_contains "$STUB_LOG" "picture-uri-dark file://$HOME/.config/ducal/wallpaper.png"
-  assert_not_contains "$STUB_LOG" "backwater"
+  assert_not_contains "$STUB_LOG" "ducal-gruvbox.svg"
+}
+
+test_theme_uses_a_wallpaper_generated_from_its_palette() {
+  "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  local w="$HOME/.local/share/ducal/wallpapers/ducal-gruvbox.svg"
+  assert_contains "$w" 'fill="#282828"'
+  assert_contains "$w" 'id="ducal-mark"'
+  assert_contains "$w" 'fill="#7daea3"'
+  assert_not_contains "$w" "{{"
+  python3 -c "import sys; from xml.dom import minidom; minidom.parse(sys.argv[1])" "$w" 2>/dev/null || fail "wallpaper is not valid SVG"
+  assert_contains "$STUB_LOG" "gsettings set org.gnome.desktop.background picture-uri-dark file://$w"
 }
 
 test_wallpaper_reset_returns_to_the_theme_wallpaper() {
   make_png "$SANDBOX/mine.png"
-  mkdir -p "$HOME/.local/share/ducal/wallpapers"; echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
   "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1
   "$ROOT/bin/ducal" wallpaper "$SANDBOX/mine.png" >/dev/null 2>&1
   : > "$STUB_LOG"
   "$ROOT/bin/ducal" wallpaper reset >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
   [[ ! -e $HOME/.config/ducal/wallpaper.png ]] || fail "custom wallpaper should be removed"
-  assert_contains "$STUB_LOG" "picture-uri-dark file://$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
+  assert_contains "$STUB_LOG" "picture-uri-dark file://$HOME/.local/share/ducal/wallpapers/ducal-gruvbox.svg"
 }
 
 test_wallpaper_rejects_missing_and_non_image_files() {
