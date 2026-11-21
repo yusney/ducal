@@ -112,9 +112,12 @@ greeter_apply() {
 
 # greeter_remove_logo WORK_DIR — puts back the distribution logo line, if ducal set one.
 greeter_remove_logo() {
-  grep -qxF "logo='$LOGO_DEST'" "$GREETER" 2>/dev/null || return 0
-  greeter_edit unset "$GREETER" "$LOGO_DEST" >"$1/greeter"
-  greeter_apply "$1/greeter"
+  if grep -qxF "logo='$LOGO_DEST'" "$GREETER" 2>/dev/null; then
+    greeter_edit unset "$GREETER" "$LOGO_DEST" >"$1/greeter"
+    greeter_apply "$1/greeter"
+  fi
+  # Also after an install that stopped before editing the greeter: the original
+  # line is then still in place, so the saved copy is no longer needed.
   as_root rm -f "$LOGO_DEST" "$GREETER_SAVED_LINE"
 }
 

@@ -523,6 +523,49 @@ test_system_reinstall_without_logo_goes_back_to_the_ducal_mark() {
   [[ ! -e $r/usr/share/pixmaps/ducal-logo.svg ]] || fail "logo file left behind after restore"
 }
 
+test_system_restore_puts_back_an_active_distro_logo_line() {
+  setup_sysroot
+  local r=$DUCAL_SYSROOT g="$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults"
+  printf '[org/gnome/login-screen]\nlogo=%s\n' "'/usr/share/pixmaps/distro.png'" > "$g"
+  DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/logo.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1
+  DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1
+  "$ROOT/bin/ducal" system restore >/dev/null 2>&1
+  assert_eq "$(grep 'logo=' "$g")" "logo='/usr/share/pixmaps/distro.png'"
+  [[ ! -e $r/usr/share/pixmaps/ducal-logo.svg && ! -e $g.ducal-logo-line ]] || fail "ducal files left behind"
+}
+
+test_system_install_with_a_missing_logo_changes_nothing() {
+  setup_sysroot
+  cp "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" "$SANDBOX/greeter.before"
+  DUCAL_SYSTEM=yes DUCAL_LOGO="$SANDBOX/nope.svg" "$ROOT/install.sh" --only system >/dev/null 2>&1; local rc=$?
+  [[ $rc -ne 0 ]] || fail "expected a failure"
+  cmp -s "$SANDBOX/greeter.before" "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults" || fail "greeter changed"
+  assert_not_contains "$STUB_LOG" "update-alternatives"
+  assert_not_contains "$STUB_LOG" "update-initramfs"
+}
+
+test_system_restore_cleans_up_after_an_interrupted_install() {
+  setup_sysroot
+  local r=$DUCAL_SYSROOT
+  # The install stopped after saving the original line and the logo, before editing the greeter
+  mkdir -p "$r/usr/share/pixmaps"
+  echo '<svg/>' > "$r/usr/share/pixmaps/ducal-logo.svg"
+  echo "#logo='/x.png'" > "$r/etc/gdm3/greeter.dconf-defaults.ducal-logo-line"
+  "$ROOT/bin/ducal" system restore >/dev/null 2>&1
+  [[ ! -e $r/usr/share/pixmaps/ducal-logo.svg && ! -e $r/etc/gdm3/greeter.dconf-defaults.ducal-logo-line ]] || fail "ducal files left behind"
+  assert_contains "$r/etc/gdm3/greeter.dconf-defaults" "#logo='/x.png'"
+}
+
+test_system_boot_watermark_is_640px_wide() {
+  setup_sysroot
+  DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1
+  local w
+  w=$(python3 -c "import struct,sys; d=open(sys.argv[1],'rb').read(24); print(struct.unpack('>I', d[16:20])[0])" \
+    "$DUCAL_SYSROOT/usr/share/plymouth/themes/ducal/watermark.png" 2>/dev/null)
+  assert_eq "$w" "640"
+}
+
 test_system_logo_line_is_added_when_missing() {
   setup_sysroot
   printf '[org/gnome/login-screen]\ndisable-user-list=false\n' > "$DUCAL_SYSROOT/etc/gdm3/greeter.dconf-defaults"
