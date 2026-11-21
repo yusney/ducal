@@ -84,22 +84,31 @@ parse_groups() {
 use_whiptail() { [[ -z ${DUCAL_NO_WHIPTAIL:-} ]] && has_cmd whiptail; }
 
 # checklist TITLE TEXT "TAG|LABEL|on/off"... -> chosen tags; fails when cancelled.
+# The first entry, "all", ticks every entry at once.
 # Without whiptail, asks one y/N question per entry on stdin.
 checklist() {
-  local title=$1 text=$2 entry tag label state answer args=() chosen=()
+  local title=$1 text=$2 entry tag label state answer args=() chosen=() every=()
   shift 2
+  for entry in "$@"; do every+=("${entry%%|*}"); done
   if use_whiptail; then
+    args=(all "Everything below" OFF)
     for entry in "$@"; do
       IFS='|' read -r tag label state <<<"$entry"
       args+=("$tag" "$label" "$state")
     done
     # whiptail draws on the terminal and prints the choice on stderr
-    answer=$(whiptail --title "$title" --separate-output --checklist "$text" 20 90 $# "${args[@]}" 3>&1 1>&2 2>&3) || return 1
+    answer=$(whiptail --title "$title" --separate-output --checklist "$text" 20 90 $(($# + 1)) "${args[@]}" 3>&1 1>&2 2>&3) || return 1
     # one tag per line (--separate-output); some versions quote them
-    echo $answer | tr -d '"'
+    answer=$(echo $answer | tr -d '"')
+    if [[ " $answer " == *" all "* ]]; then echo "${every[*]}"; else echo "$answer"; fi
     return 0
   fi
   echo "$title: $text" >&2
+  read -r -p "  Everything below? [y/N] " answer || answer=""
+  if [[ ${answer,,} == y ]]; then
+    echo "${every[*]}"
+    return 0
+  fi
   for entry in "$@"; do
     IFS='|' read -r tag label state <<<"$entry"
     if [[ $state == ON ]]; then

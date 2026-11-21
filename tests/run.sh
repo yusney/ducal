@@ -11,7 +11,9 @@ setup_sandbox() {
   SANDBOX=$(mktemp -d)
   export HOME="$SANDBOX/home" STUB_LOG="$SANDBOX/calls.log"
   unset XDG_CONFIG_HOME XDG_DATA_HOME DUCAL_CONFIG_DIR DUCAL_DATA_DIR DUCAL_ROOT
-  mkdir -p "$HOME" "$SANDBOX/stubs"
+  # the web search lock lives here: keep it away from the real session
+  export XDG_RUNTIME_DIR="$SANDBOX/run"
+  mkdir -p "$HOME" "$SANDBOX/stubs" "$XDG_RUNTIME_DIR"
   for cmd in gsettings dconf pkill gnome-extensions; do
     printf '#!/usr/bin/env bash\necho "%s $*" >> "$STUB_LOG"\n' "$cmd" > "$SANDBOX/stubs/$cmd"
     chmod +x "$SANDBOX/stubs/$cmd"
@@ -221,6 +223,26 @@ test_groups_menu_uses_a_checklist() {
   assert_contains "$STUB_LOG" "languages"
 }
 
+test_groups_menus_offer_everything_first() {
+  stub_whiptail
+  printf 'all\n' > "$SANDBOX/picked"
+  assert_eq "$(DUCAL_WSL=0 groups 'menu_groups')" "terminal languages desktop-apps gnome system cleanup"
+  assert_eq "$(DUCAL_WSL=1 groups 'menu_groups')" "terminal languages" "WSL: everything it offers"
+  assert_eq "$(groups 'menu_items languages')" "node go rust docker"
+  # "all" is the first entry of the checklist
+  grep -qE -- '--checklist .* [0-9]+ all Everything below ' "$STUB_LOG" || fail "all is not the first entry: $(head -1 "$STUB_LOG")"
+  # ticking all plus some others is still all
+  printf 'all\ngo\n' > "$SANDBOX/picked"
+  assert_eq "$(groups 'menu_items languages')" "node go rust docker"
+}
+
+test_groups_question_fallback_offers_everything_first() {
+  local answers
+  answers=$(printf 'y\n' | PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_WSL=0 DUCAL_NO_WHIPTAIL=1 \
+    bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; menu_groups" 2>/dev/null)
+  assert_eq "$answers" "terminal languages desktop-apps gnome system cleanup"
+}
+
 test_groups_menu_cancel_aborts() {
   stub_whiptail
   DUCAL_WSL=0 groups 'menu_groups' >/dev/null 2>&1; local rc=$?
@@ -236,7 +258,7 @@ test_groups_items_menu_picks_extras() {
 
 test_groups_menu_falls_back_to_questions_without_whiptail() {
   local answers
-  answers=$(printf 'y\nn\nn\nn\nn\nn\n' | PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_WSL=0 DUCAL_NO_WHIPTAIL=1 \
+  answers=$(printf 'n\ny\nn\nn\nn\nn\nn\n' | PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_WSL=0 DUCAL_NO_WHIPTAIL=1 \
     bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; menu_groups" 2>/dev/null)
   assert_eq "$answers" "terminal"
 }
