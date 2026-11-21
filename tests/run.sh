@@ -272,6 +272,60 @@ test_gnome_module_loads_desktop_settings() {
   assert_not_contains "$SANDBOX/dconf-loaded" "DP-4"
 }
 
+# ---------------------------------------------------------------- assets
+# git clone creates a repo whose install.sh only logs; curl writes the -o file.
+stub_asset_tools() {
+  stub_package_tools
+  local s="$SANDBOX/stubs"
+  cat > "$s/git" <<'EOF'
+#!/usr/bin/env bash
+echo "git $*" >> "$STUB_LOG"
+dest="${@: -1}"
+mkdir -p "$dest/themes" "$dest/dist-white"
+printf '#!/usr/bin/env bash\necho "upstream-install %s $*" >> "$STUB_LOG"\n' "$(basename "$dest")" > "$dest/themes/install.sh"
+cp "$dest/themes/install.sh" "$dest/install.sh"
+chmod +x "$dest/themes/install.sh" "$dest/install.sh"
+echo cursor > "$dest/dist-white/index.theme"
+EOF
+  cat > "$s/curl" <<'EOF'
+#!/usr/bin/env bash
+echo "curl $*" >> "$STUB_LOG"
+out=""; while [[ $# -gt 0 ]]; do [[ $1 == -o ]] && out=$2; shift; done
+[[ -n $out ]] && echo image > "$out"
+exit 0
+EOF
+  chmod +x "$s/git" "$s/curl"
+}
+
+test_assets_module_installs_themes_icons_cursors_and_wallpapers() {
+  stub_asset_tools
+  "$ROOT/install.sh" --only assets >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "Fausto-Korpsvart/Tokyonight-GTK-Theme"
+  assert_contains "$STUB_LOG" "Fausto-Korpsvart/Gruvbox-GTK-Theme"
+  assert_contains "$STUB_LOG" "upstream-install Tela-circle-icon-theme"
+  assert_contains "$HOME/.icons/Vimix-white-cursors/index.theme" "cursor"
+  assert_contains "$HOME/.icons/default/index.theme" "Inherits=Vimix-white-cursors"
+  local w="$HOME/.local/share/ducal/wallpapers"
+  [[ -s $w/omarchy-tokyo-liftoff.webp && -s $w/omarchy-gruvbox-backwater.jpg ]] || fail "wallpapers missing: $(ls "$w" 2>&1)"
+  assert_eq "$(cat "$HOME/.config/ducal/current" 2>/dev/null)" "tokyo-night" "default theme applied"
+}
+
+test_assets_module_skips_what_is_already_installed() {
+  stub_asset_tools
+  mkdir -p "$HOME/.themes/Tokyonight-Dark" "$HOME/.themes/Gruvbox-Dark" "$HOME/.local/share/icons/Tela-circle-dark" \
+    "$HOME/.icons/Vimix-white-cursors" "$HOME/.local/share/ducal/wallpapers" "$HOME/.config/ducal"
+  # Non-empty: an empty file counts as an interrupted download and is fetched again
+  echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-tokyo-liftoff.webp"
+  echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
+  echo gruvbox > "$HOME/.config/ducal/current"
+  "$ROOT/install.sh" --only assets >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "git clone"
+  assert_not_contains "$STUB_LOG" "curl"
+  assert_eq "$(cat "$HOME/.config/ducal/current")" "gruvbox" "user's theme kept"
+}
+
 # ---------------------------------------------------------------- run
 ORIG_PATH=$PATH
 ORIG_HOME=$HOME

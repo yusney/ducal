@@ -7,14 +7,14 @@ ducal turns a fresh Ubuntu install into a cohesive, themed workspace inspired by
 one color palette shared by the desktop, the terminal, the editor and the tools you
 use every day. Switch the whole desktop to another palette with a single command.
 
-> **Status: work in progress.** The apps, GNOME and configuration modules and the
+> **Status: work in progress.** The apps, GNOME, configuration and assets modules and the
 > `ducal theme` command work today. The remaining modules are listed in the [roadmap](#roadmap).
 
 ## What you get
 
 | Area | Setup |
 | --- | --- |
-| Desktop | GNOME with Tokyo Night GTK and shell themes, tiling via Forge, hidden dock, slim top bar |
+| Desktop | GNOME with matching GTK and shell themes, Tela icons, Vimix cursors, tiling via Forge, hidden dock, slim top bar |
 | Launcher | Search Light on `Super+Space` |
 | Terminal | kitty + fish + Starship, JetBrainsMono Nerd Font |
 | Editor | Neovim with LazyVim, VS Code themed to match |
@@ -110,7 +110,7 @@ Then run `ducal theme <name>`.
 - [x] Configuration module and `ducal theme`
 - [x] Applications: base tools plus optional extras
 - [x] GNOME setup (extensions, dock, top bar, Forge, launcher, shortcuts)
-- [ ] Theme assets (GTK theme, cursors, icons, wallpapers)
+- [x] Theme assets (GTK themes, cursors, icons, wallpapers)
 - [ ] Login screen and boot splash, with one-command restore
 - [ ] Optional cleanup of preinstalled software you do not need
 - [ ] Screenshots
@@ -129,7 +129,8 @@ touch your real configuration.
 ducal stands on the shoulders of these projects:
 
 - [Omarchy](https://github.com/omacom/omarchy) by DHH and contributors: inspiration and wallpapers (MIT)
-- [Tokyonight GTK Theme](https://github.com/Fausto-Korpsvart/Tokyonight-GTK-Theme) by Fausto-Korpsvart (GPL-3.0)
+- [Tokyonight](https://github.com/Fausto-Korpsvart/Tokyonight-GTK-Theme) and [Gruvbox](https://github.com/Fausto-Korpsvart/Gruvbox-GTK-Theme) GTK themes by Fausto-Korpsvart (GPL-3.0)
+- [Tela circle icons](https://github.com/vinceliuice/Tela-circle-icon-theme) and [Vimix cursors](https://github.com/vinceliuice/Vimix-cursors) by vinceliuice (GPL-3.0)
 - [tokyonight.nvim](https://github.com/folke/tokyonight.nvim) by folke (Apache-2.0), also the source of the fish and lazygit palettes
 - [tokyo-night.yazi](https://github.com/BennyOe/tokyo-night.yazi) and [gruvbox-dark.yazi](https://github.com/bennyyip/gruvbox-dark.yazi) flavors
 - [gruvbox.nvim](https://github.com/ellisonleao/gruvbox.nvim) by ellisonleao (MIT)
