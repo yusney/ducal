@@ -288,6 +288,9 @@ test_gnome_module_loads_desktop_settings() {
   assert_contains "$SANDBOX/dconf-loaded" "switch-to-application-9=@as []"
   assert_contains "$SANDBOX/dconf-loaded" "app-hotkey-10=@as []"
   assert_contains "$SANDBOX/dconf-loaded" "app-hotkey-5=@as []"
+  # Super+Q closes windows (Alt+F4 still works); the dock no longer reserves it
+  assert_contains "$SANDBOX/dconf-loaded" "close=['<Super>q', '<Alt>F4']"
+  assert_contains "$SANDBOX/dconf-loaded" "shortcut=@as []"
   assert_contains "$SANDBOX/dconf-loaded" "hot-keys=false"
   assert_contains "$SANDBOX/dconf-loaded" "enable-activate-workspace-shortcuts=false"
   assert_contains "$STUB_LOG" "uuid=space-bar@luchrioh"

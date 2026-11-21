@@ -118,6 +118,7 @@ Open a new terminal and reopen Neovim to see every change.
 | `Super+C` | Toggle floating window |
 | `Super+1…4` | Go to workspace 1–4 |
 | `Super+Shift+1…4` | Send the window to workspace 1–4 |
+| `Super+Q` | Close the window (`Alt+F4` also works) |
 | `Ctrl+Alt+L` | Lock screen |
 | `Shift+Super+Space` | Switch keyboard layout |
 
