@@ -6,9 +6,17 @@
 
 # shellcheck source=../lib/apps.sh
 source "$DUCAL_ROOT/lib/apps.sh"
+# shellcheck source=../lib/groups.sh
+source "$DUCAL_ROOT/lib/groups.sh"
 
-install_base
-log_ok "Base apps ready: kitty, fish, Neovim, Starship, btop, lazygit, yazi, git, gh, Claude Code CLI, JetBrainsMono Nerd Font"
+if group_on terminal; then
+  install_terminal_tools
+  log_ok "Terminal tools ready: fish, Neovim, Starship, btop, lazygit, yazi, git, gh, Claude Code CLI, opencode"
+fi
+if group_on desktop-apps; then
+  install_desktop_apps
+  log_ok "Desktop apps ready: kitty, JetBrainsMono Nerd Font"
+fi
 
 extras=$(select_extras) || exit 1
 for extra in $extras; do

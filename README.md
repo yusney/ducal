@@ -17,13 +17,14 @@ use every day. Switch the whole desktop to another palette with a single command
 | Launcher | Search Light on `Super+Space` |
 | Terminal | kitty + fish + Starship, JetBrainsMono Nerd Font |
 | Editor | Neovim with LazyVim, VS Code themed to match |
-| Tools | btop, lazygit, yazi, git, gh, ripgrep, fd, [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) |
+| Tools | btop, lazygit, yazi, git, gh, ripgrep, fd, [Claude Code CLI](https://docs.claude.com/en/docs/claude-code), [opencode](https://opencode.ai) |
 | Themes | Tokyo Night and Gruvbox, switched everywhere with `ducal theme` |
 | System | Themed login screen (GDM) and boot splash (Plymouth), optional |
 
 ## Requirements
 
-- Ubuntu 24.04 LTS with GNOME on x86_64 (other versions are untested)
+- Ubuntu 24.04 LTS with GNOME on x86_64 (other versions are untested). Only the
+  terminal tools? Ubuntu on WSL or a server works too (see [Choose what to install](#choose-what-to-install)).
 - A user with `sudo` access
 - An internet connection (packages and third-party assets are downloaded at install time)
 
@@ -37,11 +38,35 @@ cd ~/.local/share/ducal
 
 Log out and back in when it finishes.
 
+### Choose what to install
+
+The installer opens a checklist of groups (Space ticks, Enter confirms), then asks
+which items you want from the groups that have them:
+
+| Group | What it installs |
+| --- | --- |
+| `terminal` | fish, Neovim, Starship, git, gh, lazygit, yazi, btop, ripgrep, fd, Claude Code CLI, opencode, their configuration and colors |
+| `languages` | Your pick of Node.js (fnm), Go, Rust and Docker |
+| `desktop-apps` | kitty and JetBrainsMono Nerd Font, plus your pick of Chrome, VS Code, Steam and Discord |
+| `gnome` | Extensions, tiling, top bar, launcher, GTK and shell themes, icons, cursors, wallpapers, shortcuts |
+| `system` | Login screen and boot splash with the ducal mark |
+| `cleanup` | Removes preinstalled software you do not need (see [Optional cleanup](#optional-cleanup)) |
+
+On **WSL** the installer detects it and only offers `terminal` and `languages`, since
+there is no graphical desktop. Skip the checklist with a profile or a list of groups:
+
+```bash
+./install.sh --profile desktop                 # terminal, desktop-apps, gnome
+./install.sh --profile dev                     # terminal, languages (the WSL default)
+DUCAL_GROUPS=terminal,languages ./install.sh   # or DUCAL_GROUPS=all
+```
+
+Without a terminal and no answer, the installer uses `desktop` (`dev` on WSL).
+
 The installer is **idempotent**: running it again is safe. Any file of yours that
 ducal replaces is kept next to it as `<file>.ducal-backup-<timestamp>`.
 
-The installer asks which optional extras to add: Chrome, VS Code, Docker, Go,
-Rust, Node.js (through fnm), Steam and Discord. Skip the questions with an environment variable:
+Pick the items of `languages` and `desktop-apps` in advance with an environment variable:
 
 ```bash
 DUCAL_EXTRAS=chrome,code,docker ./install.sh   # or DUCAL_EXTRAS=all / none

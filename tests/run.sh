@@ -11,7 +11,9 @@ setup_sandbox() {
   SANDBOX=$(mktemp -d)
   export HOME="$SANDBOX/home" STUB_LOG="$SANDBOX/calls.log"
   unset XDG_CONFIG_HOME XDG_DATA_HOME DUCAL_CONFIG_DIR DUCAL_DATA_DIR DUCAL_ROOT
-  mkdir -p "$HOME" "$SANDBOX/stubs"
+  # the web search lock lives here: keep it away from the real session
+  export XDG_RUNTIME_DIR="$SANDBOX/run"
+  mkdir -p "$HOME" "$SANDBOX/stubs" "$XDG_RUNTIME_DIR"
   for cmd in gsettings dconf pkill gnome-extensions; do
     printf '#!/usr/bin/env bash\necho "%s $*" >> "$STUB_LOG"\n' "$cmd" > "$SANDBOX/stubs/$cmd"
     chmod +x "$SANDBOX/stubs/$cmd"
@@ -92,6 +94,17 @@ test_theme_apply_switches_every_target() {
   assert_not_contains "$HOME/.themes/Ducal/gnome-shell/gnome-shell.css" '{{'
 }
 
+test_theme_apply_without_gnome_only_themes_the_terminal() {
+  rm -f "$SANDBOX/stubs/gsettings" "$SANDBOX/stubs/dconf"
+  LC_ALL=C PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_NO_GNOME=1 "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  assert_eq "$rc" "0"
+  assert_link "$HOME/.config/starship.toml" "$ROOT/themes/gruvbox/starship.toml"
+  assert_link "$HOME/.config/fish/conf.d/ducal-theme.fish" "$ROOT/themes/gruvbox/fish.fish"
+  assert_not_contains "$SANDBOX/err" "not found"
+  [[ ! -d $HOME/.local/share/ducal/wallpapers ]] || fail "wallpaper generated without GNOME"
+  [[ ! -e $HOME/.themes/Ducal ]] || fail "shell theme written without GNOME"
+}
+
 test_theme_apply_twice_is_idempotent() {
   "$ROOT/bin/ducal" theme tokyo-night >/dev/null 2>&1
   "$ROOT/bin/ducal" theme tokyo-night >/dev/null 2>&1; local rc=$?
@@ -157,6 +170,99 @@ test_config_module_skips_the_status_line_without_ccstatusline() {
   [[ ! -e $HOME/.claude/settings.json ]] || fail "settings.json must not be created without ccstatusline"
 }
 
+# ---------------------------------------------------------------- groups
+# groups CODE — runs CODE with lib/groups.sh loaded, outside a terminal
+groups() { bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; $1" </dev/null; }
+
+test_groups_parse_validates_and_orders() {
+  assert_eq "$(DUCAL_WSL=0 groups 'parse_groups "gnome, terminal"')" "terminal gnome"
+  assert_eq "$(DUCAL_WSL=0 groups 'parse_groups all')" "terminal languages desktop-apps gnome system cleanup"
+  assert_eq "$(DUCAL_WSL=0 groups 'parse_groups none')" ""
+  local err; err=$(DUCAL_WSL=0 groups 'parse_groups terminal,games' 2>&1); local rc=$?
+  assert_eq "$rc" "1"
+  [[ $err == *"Unknown group: games"* ]] || fail "unknown group message: $err"
+}
+
+test_groups_on_wsl_only_offer_the_terminal_ones() {
+  assert_eq "$(DUCAL_WSL=1 groups 'available_groups')" "terminal languages"
+  local err; err=$(DUCAL_WSL=1 groups 'parse_groups terminal,gnome,languages' 2>"$SANDBOX/err")
+  assert_eq "$err" "terminal languages"
+  assert_contains "$SANDBOX/err" "gnome is not available on WSL"
+}
+
+test_groups_profiles() {
+  assert_eq "$(DUCAL_WSL=0 groups 'profile_groups desktop')" "terminal desktop-apps gnome"
+  assert_eq "$(DUCAL_WSL=0 groups 'profile_groups dev')" "terminal languages"
+  DUCAL_WSL=0 groups 'profile_groups gaming' >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "1"
+}
+
+test_groups_resolve_without_a_terminal() {
+  assert_eq "$(DUCAL_WSL=0 groups 'resolve_groups')" "terminal desktop-apps gnome" "desktop default"
+  assert_eq "$(DUCAL_WSL=1 groups 'resolve_groups')" "terminal languages" "WSL default"
+  assert_eq "$(DUCAL_WSL=0 DUCAL_PROFILE=dev groups 'resolve_groups')" "terminal languages"
+  assert_eq "$(DUCAL_WSL=0 DUCAL_PROFILE=dev DUCAL_GROUPS=terminal,system groups 'resolve_groups')" "terminal system" "DUCAL_GROUPS wins"
+}
+
+# whiptail stub: logs its arguments, answers with $SANDBOX/picked on stderr (cancels without it)
+stub_whiptail() {
+  printf '#!/usr/bin/env bash\necho "whiptail $*" >> "$STUB_LOG"\n[[ -f "%s/picked" ]] || exit 1\ncat "%s/picked" >&2\n' "$SANDBOX" "$SANDBOX" > "$SANDBOX/stubs/whiptail"
+  chmod +x "$SANDBOX/stubs/whiptail"
+}
+
+test_groups_menu_uses_a_checklist() {
+  stub_whiptail
+  printf 'terminal\nlanguages\n' > "$SANDBOX/picked"
+  assert_eq "$(DUCAL_WSL=0 groups 'menu_groups')" "terminal languages"
+  assert_contains "$STUB_LOG" "--checklist"
+  assert_contains "$STUB_LOG" "desktop-apps"
+  # WSL: only the terminal groups are offered
+  : > "$STUB_LOG"
+  DUCAL_WSL=1 groups 'menu_groups' >/dev/null
+  assert_not_contains "$STUB_LOG" "gnome"
+  assert_contains "$STUB_LOG" "languages"
+}
+
+test_groups_menus_offer_everything_first() {
+  stub_whiptail
+  printf 'all\n' > "$SANDBOX/picked"
+  assert_eq "$(DUCAL_WSL=0 groups 'menu_groups')" "terminal languages desktop-apps gnome system cleanup"
+  assert_eq "$(DUCAL_WSL=1 groups 'menu_groups')" "terminal languages" "WSL: everything it offers"
+  assert_eq "$(groups 'menu_items languages')" "node go rust docker"
+  # "all" is the first entry of the checklist
+  grep -qE -- '--checklist .* [0-9]+ all Everything below ' "$STUB_LOG" || fail "all is not the first entry: $(head -1 "$STUB_LOG")"
+  # ticking all plus some others is still all
+  printf 'all\ngo\n' > "$SANDBOX/picked"
+  assert_eq "$(groups 'menu_items languages')" "node go rust docker"
+}
+
+test_groups_question_fallback_offers_everything_first() {
+  local answers
+  answers=$(printf 'y\n' | PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_WSL=0 DUCAL_NO_WHIPTAIL=1 \
+    bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; menu_groups" 2>/dev/null)
+  assert_eq "$answers" "terminal languages desktop-apps gnome system cleanup"
+}
+
+test_groups_menu_cancel_aborts() {
+  stub_whiptail
+  DUCAL_WSL=0 groups 'menu_groups' >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "1"
+}
+
+test_groups_items_menu_picks_extras() {
+  stub_whiptail
+  printf 'node\nrust\n' > "$SANDBOX/picked"
+  assert_eq "$(groups 'menu_items languages')" "node rust"
+  assert_contains "$STUB_LOG" "docker"
+}
+
+test_groups_menu_falls_back_to_questions_without_whiptail() {
+  local answers
+  answers=$(printf 'n\ny\nn\nn\nn\nn\nn\n' | PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_WSL=0 DUCAL_NO_WHIPTAIL=1 \
+    bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; menu_groups" 2>/dev/null)
+  assert_eq "$answers" "terminal"
+}
+
 # ---------------------------------------------------------------- apps
 # Stubs for package tools: sudo runs the command, apt-get/curl only log.
 stub_package_tools() {
@@ -208,12 +314,127 @@ test_parse_extras_rejects_unknown_names() {
 test_apps_module_skips_tools_already_installed() {
   stub_package_tools
   printf '%s\n' git curl unzip fontconfig build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
-  for c in kitty nvim starship lazygit yazi ya fd claude; do fake_cmd "$c"; done
+  for c in kitty nvim starship lazygit yazi ya fd claude opencode; do fake_cmd "$c"; done
   mkdir -p "$HOME/.local/share/fonts/JetBrainsMonoNerd"
   DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
   assert_not_contains "$STUB_LOG" "curl"
   assert_not_contains "$STUB_LOG" "apt-get install"
+}
+
+test_apps_module_installs_only_the_chosen_groups() {
+  stub_package_tools
+  printf '%s\n' git curl unzip build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
+  for c in nvim starship lazygit yazi ya fd claude opencode; do fake_cmd "$c"; done
+  # terminal only: no kitty, no Nerd Font (and their packages)
+  DUCAL_GROUPS_SELECTED="terminal" DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "kovidgoyal"
+  assert_not_contains "$STUB_LOG" "nerd-fonts"
+  assert_not_contains "$STUB_LOG" "fontconfig"
+  # desktop apps only: kitty and the font, no terminal tools
+  : > "$STUB_LOG"
+  # keep any real kitty on the host PATH out of the sandbox
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_GROUPS_SELECTED="desktop-apps" DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "kovidgoyal"
+  assert_not_contains "$STUB_LOG" "fish"
+}
+
+test_opencode_uses_the_official_installer_without_touching_shell_files() {
+  stub_package_tools
+  printf '#!/usr/bin/env bash\necho "curl $*" >> "%s"\necho "echo \\"opencode-installer \\$*\\" >> %s; mkdir -p \\$HOME/.opencode/bin; touch \\$HOME/.opencode/bin/opencode"\n' "$STUB_LOG" "$STUB_LOG" > "$SANDBOX/stubs/curl"
+  chmod +x "$SANDBOX/stubs/curl"
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_opencode" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "curl -fsSL https://opencode.ai/install"
+  assert_contains "$STUB_LOG" "opencode-installer --no-modify-path"
+  assert_link "$HOME/.local/bin/opencode" "$HOME/.opencode/bin/opencode"
+}
+
+test_opencode_is_skipped_when_already_installed() {
+  stub_package_tools
+  fake_cmd opencode
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_opencode" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "curl"
+}
+
+test_desktop_modules_skip_when_their_group_is_not_chosen() {
+  local m rc
+  for m in gnome assets system cleanup; do
+    : > "$STUB_LOG"
+    PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_GROUPS_SELECTED="terminal languages" DUCAL_SYSTEM=yes DUCAL_CLEANUP=all \
+      "$ROOT/install.sh" --only "$m" >/dev/null 2>&1; rc=$?
+    assert_eq "$rc" "0" "$m"
+    [[ ! -s $STUB_LOG ]] || fail "$m ran: $(head -3 "$STUB_LOG")"
+  done
+}
+
+test_config_module_for_the_terminal_only() {
+  DUCAL_GROUPS_SELECTED="terminal languages" "$ROOT/install.sh" --only config >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_link "$HOME/.config/fish/config.fish" "$ROOT/config/fish/config.fish"
+  assert_link "$HOME/.config/nvim" "$ROOT/config/nvim"
+  [[ ! -e $HOME/.config/kitty/kitty.conf ]] || fail "kitty.conf linked without desktop-apps"
+  [[ ! -e $HOME/.config/gtk-4.0/gtk.css ]] || fail "gtk.css seeded without gnome"
+  # without the GNOME group nothing else applies the default theme: config does
+  assert_link "$HOME/.config/starship.toml" "$ROOT/themes/tokyo-night/starship.toml"
+  assert_eq "$(cat "$HOME/.config/ducal/current")" "tokyo-night"
+}
+
+test_selection_sets_the_answers_for_every_module() {
+  local out
+  out=$(DUCAL_WSL=0 DUCAL_GROUPS=terminal,languages,system groups 'select_install && echo "$DUCAL_GROUPS_SELECTED|$DUCAL_EXTRAS|$DUCAL_SYSTEM|$DUCAL_CLEANUP"')
+  assert_eq "$out" "terminal languages system|none|yes|none"
+  out=$(DUCAL_WSL=0 DUCAL_GROUPS=terminal,cleanup DUCAL_EXTRAS=go groups 'select_install && echo "$DUCAL_GROUPS_SELECTED|$DUCAL_EXTRAS|$DUCAL_SYSTEM|${DUCAL_CLEANUP:-ask}"')
+  assert_eq "$out" "terminal cleanup|go|no|ask" "explicit answers win; cleanup still asks which"
+}
+
+test_selection_asks_for_the_items_of_the_chosen_groups() {
+  stub_whiptail
+  printf 'node\n' > "$SANDBOX/picked"
+  # stdin is not a terminal here, so force the item menu
+  out=$(DUCAL_WSL=0 DUCAL_GROUPS=terminal,languages DUCAL_ASK_ITEMS=1 groups 'select_install && echo "$DUCAL_EXTRAS"')
+  assert_eq "$out" "node"
+  assert_contains "$STUB_LOG" "docker"
+  assert_not_contains "$STUB_LOG" "chrome"
+}
+
+test_explicit_system_and_cleanup_answers_still_apply() {
+  local out
+  out=$(DUCAL_SYSTEM=yes DUCAL_CLEANUP=apps DUCAL_WSL=0 groups 'select_install; echo "$DUCAL_SYSTEM|$DUCAL_CLEANUP|$(group_on system && echo on)|$(group_on cleanup && echo on)"' 2>/dev/null)
+  assert_eq "$out" "yes|apps|on|on"
+}
+
+test_default_run_without_answers_skips_system_and_cleanup() {
+  local out
+  out=$(DUCAL_WSL=0 groups 'select_install; echo "$DUCAL_GROUPS_SELECTED|$DUCAL_SYSTEM|$DUCAL_CLEANUP|$DUCAL_EXTRAS"' 2>/dev/null)
+  assert_eq "$out" "terminal desktop-apps gnome|no|none|none"
+}
+
+test_false_group_does_not_abort_a_sourced_module() {
+  local out
+  out=$(bash -c "set -euo pipefail; DUCAL_ROOT='$ROOT'; source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; DUCAL_GROUPS_SELECTED=''; (source '$ROOT/install/50-system.sh'); echo rc=\$?" 2>/dev/null | tail -1)
+  assert_eq "$out" "rc=0"
+}
+
+test_wsl_drops_desktop_extras_with_a_warning() {
+  local out
+  out=$(DUCAL_WSL=1 DUCAL_EXTRAS=chrome,go,steam groups 'select_install; echo "$DUCAL_EXTRAS"' 2>"$SANDBOX/err")
+  assert_eq "$out" "go"
+  assert_contains "$SANDBOX/err" "chrome is not available on WSL"
+  assert_eq "$(DUCAL_WSL=1 DUCAL_EXTRAS=all groups 'select_install; echo "$DUCAL_EXTRAS"' 2>/dev/null)" "node,go,rust,docker"
+}
+
+test_config_module_does_not_theme_the_terminal_when_it_is_not_chosen() {
+  DUCAL_GROUPS_SELECTED="languages" "$ROOT/install.sh" --only config >/dev/null 2>&1
+  [[ ! -e $HOME/.config/starship.toml ]] || fail "terminal themed without the terminal group"
+}
+
+test_install_rejects_an_unknown_profile() {
+  local err; err=$("$ROOT/install.sh" --profile gaming 2>&1); local rc=$?
+  assert_eq "$rc" "1"
+  [[ $err == *"Unknown profile: gaming"* ]] || fail "message: $err"
 }
 
 test_claude_is_skipped_when_already_installed() {
