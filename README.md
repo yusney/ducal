@@ -30,7 +30,7 @@ use every day. Switch the whole desktop to another palette with a single command
 ## Install
 
 ```bash
-git clone https://github.com/<user>/ducal.git ~/.local/share/ducal
+git clone https://github.com/yusney/ducal.git ~/.local/share/ducal
 cd ~/.local/share/ducal
 ./install.sh
 ```
