@@ -573,6 +573,58 @@ test_cleanup_restore_services_reenables_them() {
   assert_contains "$STUB_LOG" "systemctl --user unmask tracker-miner-fs-3.service"
 }
 
+# ---------------------------------------------------------------- wallpaper
+make_png() {
+  python3 -c "import zlib,struct,sys
+def chunk(t,d): return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
+open(sys.argv[1],'wb').write(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',1,1,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(b'\x00\x00\x00\x00'))+chunk(b'IEND',b''))" "$1"
+}
+
+test_wallpaper_sets_a_copy_of_the_image() {
+  make_png "$SANDBOX/mine.png"
+  "$ROOT/bin/ducal" wallpaper "$SANDBOX/mine.png" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  local copy="$HOME/.config/ducal/wallpaper.png"
+  cmp -s "$copy" "$SANDBOX/mine.png" || fail "copy missing or different"
+  assert_contains "$STUB_LOG" "gsettings set org.gnome.desktop.background picture-uri-dark file://$copy"
+  rm "$SANDBOX/mine.png"
+  "$ROOT/bin/ducal" wallpaper 2>&1 | grep -qF "$copy" || fail "status should show the custom wallpaper"
+}
+
+test_theme_switch_keeps_the_custom_wallpaper() {
+  make_png "$SANDBOX/mine.png"
+  mkdir -p "$HOME/.local/share/ducal/wallpapers"; echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
+  "$ROOT/bin/ducal" wallpaper "$SANDBOX/mine.png" >/dev/null 2>&1
+  : > "$STUB_LOG"
+  "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "picture-uri-dark file://$HOME/.config/ducal/wallpaper.png"
+  assert_not_contains "$STUB_LOG" "backwater"
+}
+
+test_wallpaper_reset_returns_to_the_theme_wallpaper() {
+  make_png "$SANDBOX/mine.png"
+  mkdir -p "$HOME/.local/share/ducal/wallpapers"; echo img > "$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
+  "$ROOT/bin/ducal" theme gruvbox >/dev/null 2>&1
+  "$ROOT/bin/ducal" wallpaper "$SANDBOX/mine.png" >/dev/null 2>&1
+  : > "$STUB_LOG"
+  "$ROOT/bin/ducal" wallpaper reset >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  [[ ! -e $HOME/.config/ducal/wallpaper.png ]] || fail "custom wallpaper should be removed"
+  assert_contains "$STUB_LOG" "picture-uri-dark file://$HOME/.local/share/ducal/wallpapers/omarchy-gruvbox-backwater.jpg"
+}
+
+test_wallpaper_rejects_missing_and_non_image_files() {
+  local err
+  err=$("$ROOT/bin/ducal" wallpaper "$SANDBOX/nope.png" 2>&1); local rc=$?
+  assert_eq "$rc" "1"
+  [[ $err == *"not found"* ]] || fail "stderr: $err"
+  echo "text" > "$SANDBOX/notes.png"
+  err=$("$ROOT/bin/ducal" wallpaper "$SANDBOX/notes.png" 2>&1); rc=$?
+  assert_eq "$rc" "1"
+  [[ $err == *"not an image"* ]] || fail "stderr: $err"
+  assert_not_contains "$STUB_LOG" "picture-uri"
+}
+
 # ---------------------------------------------------------------- run
 ORIG_PATH=$PATH
 ORIG_HOME=$HOME

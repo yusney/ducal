@@ -95,6 +95,8 @@ Turn the services back on with `ducal cleanup restore-services`.
 ducal theme                # list themes, current one marked with *
 ducal theme gruvbox        # switch the whole desktop to Gruvbox
 ducal theme tokyo-night    # back to Tokyo Night
+ducal wallpaper ~/me.png   # your own wallpaper, kept across theme switches
+ducal wallpaper reset      # back to each theme's wallpaper
 ducal system restore       # back to the distribution login screen and boot splash
 ducal cleanup restore-services   # enable the services the cleanup disabled
 ```

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # ducal: manage the ducal desktop.
-#   ducal theme           list themes (current one marked with *)
-#   ducal theme <name>    switch the whole desktop to a theme
-#   ducal system restore  restore the distribution login screen and boot splash
+#   ducal theme                     list themes (current one marked with *)
+#   ducal theme <name>              switch the whole desktop to a theme
+#   ducal wallpaper <image>         use your own wallpaper with every theme
+#   ducal wallpaper reset           go back to each theme's wallpaper
+#   ducal system restore            restore the distribution login screen and boot splash
 #   ducal cleanup restore-services  enable the services the cleanup disabled
-#   ducal help            show this help
+#   ducal help                      show this help
 set -uo pipefail
 
 DUCAL_ROOT=${DUCAL_ROOT:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}
@@ -19,7 +21,7 @@ FALLBACK_GTK="Tokyonight-Dark"
 notes=()
 note() { notes+=("$1"); }
 
-usage() { sed -n '2,7p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,9p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
 
 current_theme() { [[ -f $CURRENT_FILE ]] && cat "$CURRENT_FILE"; }
 
@@ -103,15 +105,61 @@ apply_shell() {
   dconf write /org/gnome/shell/extensions/user-theme/name "'Ducal'"
 }
 
+set_background() {
+  local uri
+  uri="file://$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$1")"
+  gsettings set org.gnome.desktop.background picture-uri "$uri"
+  gsettings set org.gnome.desktop.background picture-uri-dark "$uri"
+}
+
+# The user's own wallpaper (set with `ducal wallpaper`), if any
+custom_wallpaper() { find "$DUCAL_CONFIG_DIR" -maxdepth 1 -name 'wallpaper.*' 2>/dev/null | head -1; }
+
+# A custom wallpaper wins over the theme's own.
 apply_wallpaper() {
-  local file="$DUCAL_DATA_DIR/wallpapers/$WALLPAPER_FILE" uri
+  local file
+  file=$(custom_wallpaper)
+  [[ -n $file ]] || file="$DUCAL_DATA_DIR/wallpapers/$WALLPAPER_FILE"
   if [[ ! -f $file ]]; then
     note "Wallpaper not downloaded yet: run ./install.sh --only assets"
     return 0
   fi
-  uri="file://$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$file")"
-  gsettings set org.gnome.desktop.background picture-uri "$uri"
-  gsettings set org.gnome.desktop.background picture-uri-dark "$uri"
+  set_background "$file"
+}
+
+cmd_wallpaper() {
+  local current
+  current=$(custom_wallpaper)
+  case ${1:-} in
+    "")
+      if [[ -n $current ]]; then echo "Custom wallpaper: $current"; else echo "Using the theme's wallpaper"; fi
+      echo "Usage: ducal wallpaper <image> | ducal wallpaper reset"
+      ;;
+    reset)
+      [[ -n $current ]] && rm -f "$current"
+      local theme
+      theme=$(current_theme)
+      if [[ -n $theme && -f $THEMES_DIR/$theme/palette.env ]]; then
+        # shellcheck source=/dev/null
+        source "$THEMES_DIR/$theme/palette.env"
+        apply_wallpaper
+      fi
+      log_ok "Back to the theme's wallpaper"
+      ;;
+    *)
+      local src=$1 ext
+      [[ -f $src ]] || { log_error "Wallpaper not found: $src"; return 1; }
+      [[ $(file --mime-type -b "$src") == image/* ]] || { log_error "$src is not an image"; return 1; }
+      ext=${src##*.}
+      ext=${ext,,}
+      mkdir -p "$DUCAL_CONFIG_DIR"
+      [[ -n $current ]] && rm -f "$current"
+      # A copy, so moving or deleting the original never breaks the desktop
+      cp "$src" "$DUCAL_CONFIG_DIR/wallpaper.$ext"
+      set_background "$DUCAL_CONFIG_DIR/wallpaper.$ext"
+      log_ok "Wallpaper set. ducal theme keeps it; ducal wallpaper reset goes back to the theme's."
+      ;;
+  esac
 }
 
 cmd_theme() {
@@ -170,6 +218,7 @@ cmd_cleanup() {
 
 case ${1:-help} in
   theme) shift; cmd_theme "$@" ;;
+  wallpaper) shift; cmd_wallpaper "$@" ;;
   cleanup) shift; cmd_cleanup "$@" ;;
   system) shift; cmd_system "$@" ;;
   help | -h | --help) usage ;;
