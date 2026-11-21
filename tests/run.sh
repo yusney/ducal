@@ -157,6 +157,79 @@ test_config_module_skips_the_status_line_without_ccstatusline() {
   [[ ! -e $HOME/.claude/settings.json ]] || fail "settings.json must not be created without ccstatusline"
 }
 
+# ---------------------------------------------------------------- groups
+# groups CODE — runs CODE with lib/groups.sh loaded, outside a terminal
+groups() { bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; $1" </dev/null; }
+
+test_groups_parse_validates_and_orders() {
+  assert_eq "$(DUCAL_WSL=0 groups 'parse_groups "gnome, terminal"')" "terminal gnome"
+  assert_eq "$(DUCAL_WSL=0 groups 'parse_groups all')" "terminal languages desktop-apps gnome system cleanup"
+  assert_eq "$(DUCAL_WSL=0 groups 'parse_groups none')" ""
+  local err; err=$(DUCAL_WSL=0 groups 'parse_groups terminal,games' 2>&1); local rc=$?
+  assert_eq "$rc" "1"
+  [[ $err == *"Unknown group: games"* ]] || fail "unknown group message: $err"
+}
+
+test_groups_on_wsl_only_offer_the_terminal_ones() {
+  assert_eq "$(DUCAL_WSL=1 groups 'available_groups')" "terminal languages"
+  local err; err=$(DUCAL_WSL=1 groups 'parse_groups terminal,gnome,languages' 2>"$SANDBOX/err")
+  assert_eq "$err" "terminal languages"
+  assert_contains "$SANDBOX/err" "gnome is not available on WSL"
+}
+
+test_groups_profiles() {
+  assert_eq "$(DUCAL_WSL=0 groups 'profile_groups desktop')" "terminal desktop-apps gnome"
+  assert_eq "$(DUCAL_WSL=0 groups 'profile_groups dev')" "terminal languages"
+  DUCAL_WSL=0 groups 'profile_groups gaming' >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "1"
+}
+
+test_groups_resolve_without_a_terminal() {
+  assert_eq "$(DUCAL_WSL=0 groups 'resolve_groups')" "terminal desktop-apps gnome" "desktop default"
+  assert_eq "$(DUCAL_WSL=1 groups 'resolve_groups')" "terminal languages" "WSL default"
+  assert_eq "$(DUCAL_WSL=0 DUCAL_PROFILE=dev groups 'resolve_groups')" "terminal languages"
+  assert_eq "$(DUCAL_WSL=0 DUCAL_PROFILE=dev DUCAL_GROUPS=terminal,system groups 'resolve_groups')" "terminal system" "DUCAL_GROUPS wins"
+}
+
+# whiptail stub: logs its arguments, answers with $SANDBOX/picked on stderr (cancels without it)
+stub_whiptail() {
+  printf '#!/usr/bin/env bash\necho "whiptail $*" >> "$STUB_LOG"\n[[ -f "%s/picked" ]] || exit 1\ncat "%s/picked" >&2\n' "$SANDBOX" "$SANDBOX" > "$SANDBOX/stubs/whiptail"
+  chmod +x "$SANDBOX/stubs/whiptail"
+}
+
+test_groups_menu_uses_a_checklist() {
+  stub_whiptail
+  printf 'terminal\nlanguages\n' > "$SANDBOX/picked"
+  assert_eq "$(DUCAL_WSL=0 groups 'menu_groups')" "terminal languages"
+  assert_contains "$STUB_LOG" "--checklist"
+  assert_contains "$STUB_LOG" "desktop-apps"
+  # WSL: only the terminal groups are offered
+  : > "$STUB_LOG"
+  DUCAL_WSL=1 groups 'menu_groups' >/dev/null
+  assert_not_contains "$STUB_LOG" "gnome"
+  assert_contains "$STUB_LOG" "languages"
+}
+
+test_groups_menu_cancel_aborts() {
+  stub_whiptail
+  DUCAL_WSL=0 groups 'menu_groups' >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "1"
+}
+
+test_groups_items_menu_picks_extras() {
+  stub_whiptail
+  printf 'node\nrust\n' > "$SANDBOX/picked"
+  assert_eq "$(groups 'menu_items languages')" "node rust"
+  assert_contains "$STUB_LOG" "docker"
+}
+
+test_groups_menu_falls_back_to_questions_without_whiptail() {
+  local answers
+  answers=$(printf 'y\nn\nn\nn\nn\nn\n' | PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_WSL=0 DUCAL_NO_WHIPTAIL=1 \
+    bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; menu_groups" 2>/dev/null)
+  assert_eq "$answers" "terminal"
+}
+
 # ---------------------------------------------------------------- apps
 # Stubs for package tools: sudo runs the command, apt-get/curl only log.
 stub_package_tools() {
