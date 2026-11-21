@@ -4,6 +4,13 @@
 #   otherwise the installer asks for each group (none without a terminal).
 # Sourced by install.sh (DUCAL_ROOT and lib/common.sh are already loaded).
 
+# shellcheck source=../lib/groups.sh
+source "$DUCAL_ROOT/lib/groups.sh"
+if ! group_on cleanup; then
+  log_ok "Cleanup not chosen, skipping"
+  return 0
+fi
+
 # shellcheck source=../lib/apps.sh
 source "$DUCAL_ROOT/lib/apps.sh"
 # shellcheck source=../lib/cleanup.sh

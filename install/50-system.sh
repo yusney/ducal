@@ -5,6 +5,13 @@
 # Undo at any time with: ducal system restore
 # Sourced by install.sh (DUCAL_ROOT and lib/common.sh are already loaded).
 
+# shellcheck source=../lib/groups.sh
+source "$DUCAL_ROOT/lib/groups.sh"
+if ! group_on system; then
+  log_ok "Login screen and boot splash not chosen, skipping"
+  return 0
+fi
+
 # shellcheck source=../lib/system.sh
 source "$DUCAL_ROOT/lib/system.sh"
 

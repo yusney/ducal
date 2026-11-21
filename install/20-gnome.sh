@@ -2,6 +2,13 @@
 # Module: gnome — extensions, dock, top bar, tiling, launcher and shortcuts.
 # Sourced by install.sh (DUCAL_ROOT and lib/common.sh are already loaded).
 
+# shellcheck source=../lib/groups.sh
+source "$DUCAL_ROOT/lib/groups.sh"
+if ! group_on gnome; then
+  log_ok "GNOME desktop not chosen, skipping"
+  return 0
+fi
+
 # shellcheck source=../lib/gnome.sh
 source "$DUCAL_ROOT/lib/gnome.sh"
 

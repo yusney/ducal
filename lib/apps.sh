@@ -118,19 +118,39 @@ install_nerd_font() {
   rm -rf "$tmp"
 }
 
-install_base() {
-  apt_install git curl unzip fontconfig build-essential fish btop ripgrep fd-find gh
+install_opencode() {
+  has_cmd opencode && return 0
+  log_step "Installing opencode"
+  # Official installer; --no-modify-path keeps it out of the shell files ducal links
+  curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path
+  mkdir -p "$HOME/.local/bin" && ln -sf "$HOME/.opencode/bin/opencode" "$HOME/.local/bin/opencode"
+}
+
+# Group terminal: command-line tools, they work without a graphical session (WSL too)
+install_terminal_tools() {
+  apt_install git curl unzip build-essential fish btop ripgrep fd-find gh
   # Ubuntu ships fd as fdfind; tools like LazyVim look for `fd`
   if ! has_cmd fd && has_cmd fdfind; then
     mkdir -p "$HOME/.local/bin" && ln -sf "$(command -v fdfind)" "$HOME/.local/bin/fd"
   fi
-  install_kitty
   install_neovim
   install_starship
   install_lazygit
   install_yazi
   install_claude
+  install_opencode
+}
+
+# Group desktop-apps: the graphical terminal and its font
+install_desktop_apps() {
+  apt_install curl unzip fontconfig
+  install_kitty
   install_nerd_font
+}
+
+install_base() {
+  install_terminal_tools
+  install_desktop_apps
 }
 
 # ---------------------------------------------------------------- extras

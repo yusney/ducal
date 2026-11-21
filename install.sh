@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # ducal installer: turns a fresh Ubuntu into the ducal desktop.
-#   ./install.sh              run every module in order
-#   ./install.sh --list       list modules
-#   ./install.sh --only NAME  run a single module (e.g. --only config)
+#   ./install.sh                 asks what to install (a checklist of groups), then installs it
+#   ./install.sh --profile NAME  installs a preset: desktop (the full desktop) or dev (terminal only, WSL)
+#   ./install.sh --list          list modules
+#   ./install.sh --only NAME     run a single module (e.g. --only config)
+# Answer in advance with DUCAL_GROUPS=terminal,languages,desktop-apps,gnome,system,cleanup.
 # Every module is idempotent: running the installer again is safe.
 set -euo pipefail
 
@@ -10,12 +12,14 @@ DUCAL_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export DUCAL_ROOT
 # shellcheck source=lib/common.sh
 source "$DUCAL_ROOT/lib/common.sh"
+# shellcheck source=lib/groups.sh
+source "$DUCAL_ROOT/lib/groups.sh"
 
 modules() { find "$DUCAL_ROOT/install" -maxdepth 1 -name '[0-9][0-9]-*.sh' | sort; }
 module_name() { basename "$1" .sh | sed -E 's/^[0-9]+-//'; }
 
 usage() {
-  sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 run_module() {
@@ -26,6 +30,12 @@ run_module() {
 }
 
 main() {
+  if [[ ${1:-} == --profile ]]; then
+    [[ -n ${2:-} ]] || die "--profile needs a name: desktop or dev"
+    profile_groups "$2" >/dev/null
+    export DUCAL_PROFILE=$2
+    shift 2
+  fi
   case ${1:-} in
     -h | --help) usage ;;
     --list)
@@ -43,6 +53,8 @@ main() {
     "")
       [[ -f /etc/os-release ]] && grep -q '^ID=ubuntu' /etc/os-release ||
         log_warn "ducal targets Ubuntu; continuing anyway"
+      select_install || die "Nothing installed: the selection was cancelled"
+      log_step "Installing: ${DUCAL_GROUPS_SELECTED:-nothing}"
       while read -r f; do run_module "$f"; done < <(modules)
       log_step "Done. Log out and back in to load every change."
       ;;

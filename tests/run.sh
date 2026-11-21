@@ -281,12 +281,96 @@ test_parse_extras_rejects_unknown_names() {
 test_apps_module_skips_tools_already_installed() {
   stub_package_tools
   printf '%s\n' git curl unzip fontconfig build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
-  for c in kitty nvim starship lazygit yazi ya fd claude; do fake_cmd "$c"; done
+  for c in kitty nvim starship lazygit yazi ya fd claude opencode; do fake_cmd "$c"; done
   mkdir -p "$HOME/.local/share/fonts/JetBrainsMonoNerd"
   DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
   assert_not_contains "$STUB_LOG" "curl"
   assert_not_contains "$STUB_LOG" "apt-get install"
+}
+
+test_apps_module_installs_only_the_chosen_groups() {
+  stub_package_tools
+  printf '%s\n' git curl unzip build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
+  for c in nvim starship lazygit yazi ya fd claude opencode; do fake_cmd "$c"; done
+  # terminal only: no kitty, no Nerd Font (and their packages)
+  DUCAL_GROUPS_SELECTED="terminal" DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "kovidgoyal"
+  assert_not_contains "$STUB_LOG" "nerd-fonts"
+  assert_not_contains "$STUB_LOG" "fontconfig"
+  # desktop apps only: kitty and the font, no terminal tools
+  : > "$STUB_LOG"
+  # keep any real kitty on the host PATH out of the sandbox
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_GROUPS_SELECTED="desktop-apps" DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "kovidgoyal"
+  assert_not_contains "$STUB_LOG" "fish"
+}
+
+test_opencode_uses_the_official_installer_without_touching_shell_files() {
+  stub_package_tools
+  printf '#!/usr/bin/env bash\necho "curl $*" >> "%s"\necho "echo \\"opencode-installer \\$*\\" >> %s; mkdir -p \\$HOME/.opencode/bin; touch \\$HOME/.opencode/bin/opencode"\n' "$STUB_LOG" "$STUB_LOG" > "$SANDBOX/stubs/curl"
+  chmod +x "$SANDBOX/stubs/curl"
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_opencode" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "curl -fsSL https://opencode.ai/install"
+  assert_contains "$STUB_LOG" "opencode-installer --no-modify-path"
+  assert_link "$HOME/.local/bin/opencode" "$HOME/.opencode/bin/opencode"
+}
+
+test_opencode_is_skipped_when_already_installed() {
+  stub_package_tools
+  fake_cmd opencode
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_opencode" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "curl"
+}
+
+test_desktop_modules_skip_when_their_group_is_not_chosen() {
+  local m rc
+  for m in gnome assets system cleanup; do
+    : > "$STUB_LOG"
+    PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_GROUPS_SELECTED="terminal languages" DUCAL_SYSTEM=yes DUCAL_CLEANUP=all \
+      "$ROOT/install.sh" --only "$m" >/dev/null 2>&1; rc=$?
+    assert_eq "$rc" "0" "$m"
+    [[ ! -s $STUB_LOG ]] || fail "$m ran: $(head -3 "$STUB_LOG")"
+  done
+}
+
+test_config_module_for_the_terminal_only() {
+  DUCAL_GROUPS_SELECTED="terminal languages" "$ROOT/install.sh" --only config >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_link "$HOME/.config/fish/config.fish" "$ROOT/config/fish/config.fish"
+  assert_link "$HOME/.config/nvim" "$ROOT/config/nvim"
+  [[ ! -e $HOME/.config/kitty/kitty.conf ]] || fail "kitty.conf linked without desktop-apps"
+  [[ ! -e $HOME/.config/gtk-4.0/gtk.css ]] || fail "gtk.css seeded without gnome"
+  # without the GNOME group nothing else applies the default theme: config does
+  assert_link "$HOME/.config/starship.toml" "$ROOT/themes/tokyo-night/starship.toml"
+  assert_eq "$(cat "$HOME/.config/ducal/current")" "tokyo-night"
+}
+
+test_selection_sets_the_answers_for_every_module() {
+  local out
+  out=$(DUCAL_WSL=0 DUCAL_GROUPS=terminal,languages,system groups 'select_install && echo "$DUCAL_GROUPS_SELECTED|$DUCAL_EXTRAS|$DUCAL_SYSTEM|$DUCAL_CLEANUP"')
+  assert_eq "$out" "terminal languages system|none|yes|none"
+  out=$(DUCAL_WSL=0 DUCAL_GROUPS=terminal,cleanup DUCAL_EXTRAS=go groups 'select_install && echo "$DUCAL_GROUPS_SELECTED|$DUCAL_EXTRAS|$DUCAL_SYSTEM|${DUCAL_CLEANUP:-ask}"')
+  assert_eq "$out" "terminal cleanup|go|no|ask" "explicit answers win; cleanup still asks which"
+}
+
+test_selection_asks_for_the_items_of_the_chosen_groups() {
+  stub_whiptail
+  printf 'node\n' > "$SANDBOX/picked"
+  # stdin is not a terminal here, so force the item menu
+  out=$(DUCAL_WSL=0 DUCAL_GROUPS=terminal,languages DUCAL_ASK_ITEMS=1 groups 'select_install && echo "$DUCAL_EXTRAS"')
+  assert_eq "$out" "node"
+  assert_contains "$STUB_LOG" "docker"
+  assert_not_contains "$STUB_LOG" "chrome"
+}
+
+test_install_rejects_an_unknown_profile() {
+  local err; err=$("$ROOT/install.sh" --profile gaming 2>&1); local rc=$?
+  assert_eq "$rc" "1"
+  [[ $err == *"Unknown profile: gaming"* ]] || fail "message: $err"
 }
 
 test_claude_is_skipped_when_already_installed() {

@@ -154,3 +154,27 @@ resolve_groups() {
 # group_on NAME — whether NAME was chosen. Without a choice (a module run on
 # its own with --only), every group is on, as before groups existed.
 group_on() { [[ -z ${DUCAL_GROUPS_SELECTED+x} || " $DUCAL_GROUPS_SELECTED " == *" $1 "* ]]; }
+
+# select_install — resolves the groups once and the answers every module reads:
+# DUCAL_GROUPS_SELECTED, DUCAL_EXTRAS (items of the chosen groups), DUCAL_SYSTEM
+# (choosing the group is the consent) and DUCAL_CLEANUP (none unless chosen).
+# Answers already set in the environment win.
+select_install() {
+  local g picked items=()
+  DUCAL_GROUPS_SELECTED=$(resolve_groups) || return 1
+  export DUCAL_GROUPS_SELECTED
+  if [[ -z ${DUCAL_EXTRAS:-} ]]; then
+    for g in languages desktop-apps; do
+      group_on "$g" || continue
+      [[ -t 0 || -n ${DUCAL_ASK_ITEMS:-} ]] || continue
+      picked=$(menu_items "$g") || return 1
+      # shellcheck disable=SC2206 # space-separated item names
+      items+=($picked)
+    done
+    DUCAL_EXTRAS=$(IFS=,; echo "${items[*]}")
+    export DUCAL_EXTRAS=${DUCAL_EXTRAS:-none}
+  fi
+  if group_on system; then export DUCAL_SYSTEM=${DUCAL_SYSTEM:-yes}; else export DUCAL_SYSTEM=no; fi
+  group_on cleanup || export DUCAL_CLEANUP=none
+  return 0
+}
