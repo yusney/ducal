@@ -625,6 +625,79 @@ test_wallpaper_rejects_missing_and_non_image_files() {
   assert_not_contains "$STUB_LOG" "picture-uri"
 }
 
+# ---------------------------------------------------------------- search
+# zenity answers with $SANDBOX/typed (or cancels when the file is missing)
+stub_search_tools() {
+  local s="$SANDBOX/stubs"
+  printf '#!/usr/bin/env bash\necho "xdg-open $*" >> "$STUB_LOG"\n' > "$s/xdg-open"
+  printf '#!/usr/bin/env bash\n[[ -f "%s/typed" ]] || exit 1\ncat "%s/typed"\n' "$SANDBOX" "$SANDBOX" > "$s/zenity"
+  chmod +x "$s/xdg-open" "$s/zenity"
+}
+
+test_search_opens_the_browser_with_the_query() {
+  stub_search_tools
+  "$ROOT/bin/ducal" search "tokyo night & gruvbox" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "xdg-open https://www.google.com/search?q=tokyo+night+%26+gruvbox"
+}
+
+test_search_opens_addresses_directly() {
+  stub_search_tools
+  "$ROOT/bin/ducal" search "github.com/yusney/ducal" >/dev/null 2>&1
+  "$ROOT/bin/ducal" search "http://localhost:3000" >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "xdg-open https://github.com/yusney/ducal"
+  assert_contains "$STUB_LOG" "xdg-open http://localhost:3000"
+}
+
+test_search_without_query_asks_in_a_dialog() {
+  stub_search_tools
+  echo "neovim lazyvim" > "$SANDBOX/typed"
+  "$ROOT/bin/ducal" search >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "xdg-open https://www.google.com/search?q=neovim+lazyvim"
+}
+
+test_search_dialog_cancel_or_empty_opens_nothing() {
+  stub_search_tools
+  "$ROOT/bin/ducal" search >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  echo "   " > "$SANDBOX/typed"
+  "$ROOT/bin/ducal" search >/dev/null 2>&1
+  assert_not_contains "$STUB_LOG" "xdg-open"
+}
+
+test_search_uses_a_custom_engine() {
+  stub_search_tools
+  mkdir -p "$HOME/.config/ducal"
+  echo "https://duckduckgo.com/?q=%s" > "$HOME/.config/ducal/search-url"
+  "$ROOT/bin/ducal" search "ubuntu" >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "xdg-open https://duckduckgo.com/?q=ubuntu"
+}
+
+test_gnome_module_adds_the_search_shortcut_once() {
+  stub_gnome_tools
+  cat > "$SANDBOX/stubs/gsettings" <<EOF
+#!/usr/bin/env bash
+echo "gsettings \$*" >> "\$STUB_LOG"
+case "\$2 \$3" in
+  "org.gnome.shell enabled-extensions") f="$SANDBOX/enabled" ;;
+  "org.gnome.shell disabled-extensions") f="$SANDBOX/disabled" ;;
+  "org.gnome.settings-daemon.plugins.media-keys custom-keybindings") f="$SANDBOX/custom" ;;
+  *) exit 0 ;;
+esac
+[[ \$1 == get ]] && cat "\$f"
+[[ \$1 == set ]] && echo "\$4" > "\$f"
+exit 0
+EOF
+  chmod +x "$SANDBOX/stubs/gsettings"
+  echo "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']" > "$SANDBOX/custom"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  local p=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/ducal-search/
+  assert_eq "$(cat "$SANDBOX/custom")" "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '$p']"
+  assert_contains "$STUB_LOG" "dconf write ${p}binding '<Super>b'"
+  assert_contains "$STUB_LOG" "dconf write ${p}command '$HOME/.local/bin/ducal search'"
+}
+
 # ---------------------------------------------------------------- run
 ORIG_PATH=$PATH
 ORIG_HOME=$HOME

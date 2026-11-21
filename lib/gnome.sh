@@ -38,6 +38,29 @@ install_extension() {
   rm -rf "$tmp"
 }
 
+# add_custom_keybinding ID NAME COMMAND BINDING — a GNOME custom shortcut,
+# added once and kept next to the user's own custom shortcuts.
+add_custom_keybinding() {
+  local id=$1 name=$2 command=$3 binding=$4 list path
+  path="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/$id/"
+  list=$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
+  list=$(python3 - "$list" "$path" <<'EOF'
+import ast, sys
+value, path = sys.argv[1].strip(), sys.argv[2]
+if value.startswith("@as "):
+    value = value[4:]
+paths = ast.literal_eval(value) if value else []
+if path not in paths:
+    paths.append(path)
+print(str(paths))
+EOF
+  )
+  gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$list"
+  dconf write "${path}name" "'$name'"
+  dconf write "${path}command" "'$command'"
+  dconf write "${path}binding" "'$binding'"
+}
+
 # update_extension_lists — enables ducal extensions and disables the conflicting
 # ones, keeping every other extension the user has.
 update_extension_lists() {

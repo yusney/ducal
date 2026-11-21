@@ -19,3 +19,6 @@ log_ok "Extensions enabled (new ones load at your next login)"
 # Strip comments: dconf load does not accept them
 grep -vE '^\s*#' "$DUCAL_ROOT/config/gnome/settings.ini" | dconf load /
 log_ok "Desktop settings applied"
+
+add_custom_keybinding ducal-search "Search the web" "$HOME/.local/bin/ducal search" "<Super>b"
+log_ok "Super+B opens a web search box"

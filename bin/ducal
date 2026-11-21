@@ -4,6 +4,7 @@
 #   ducal theme <name>              switch the whole desktop to a theme
 #   ducal wallpaper <image>         use your own wallpaper with every theme
 #   ducal wallpaper reset           go back to each theme's wallpaper
+#   ducal search [text]             search the web or open an address (Super+B)
 #   ducal system restore            restore the distribution login screen and boot splash
 #   ducal cleanup restore-services  enable the services the cleanup disabled
 #   ducal help                      show this help
@@ -21,7 +22,7 @@ FALLBACK_GTK="Tokyonight-Dark"
 notes=()
 note() { notes+=("$1"); }
 
-usage() { sed -n '2,9p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,10p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
 
 current_theme() { [[ -f $CURRENT_FILE ]] && cat "$CURRENT_FILE"; }
 
@@ -188,6 +189,34 @@ cmd_theme() {
   for n in "${notes[@]}"; do log_warn "$n"; done
 }
 
+# search_target TEXT — the URL to open: addresses as they are, anything else as
+# a web search with the engine in ~/.config/ducal/search-url (%s = the query).
+search_target() {
+  local text=$1 engine encoded
+  if [[ $text =~ ^https?:// ]]; then
+    echo "$text"
+  elif [[ $text =~ ^localhost(:[0-9]+)?(/.*)?$ ]]; then
+    echo "http://$text"
+  elif [[ $text != *" "* && $text =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}(:[0-9]+)?(/.*)?$ ]]; then
+    echo "https://$text"
+  else
+    engine=$(cat "$DUCAL_CONFIG_DIR/search-url" 2>/dev/null || echo 'https://www.google.com/search?q=%s')
+    encoded=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote_plus(sys.argv[1]))' "$text")
+    echo "${engine//%s/$encoded}"
+  fi
+}
+
+# ducal search [TEXT] — without TEXT, asks for it in a small dialog (Super+B).
+cmd_search() {
+  local text="$*"
+  if [[ -z $text ]]; then
+    text=$(zenity --entry --title="Search the web" --text="Search or type an address" --width=520 2>/dev/null) || return 0
+  fi
+  text=$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$text")
+  [[ -n $text ]] || return 0
+  xdg-open "$(search_target "$text")" >/dev/null 2>&1
+}
+
 cmd_system() {
   case ${1:-} in
     restore)
@@ -219,6 +248,7 @@ cmd_cleanup() {
 case ${1:-help} in
   theme) shift; cmd_theme "$@" ;;
   wallpaper) shift; cmd_wallpaper "$@" ;;
+  search) shift; cmd_search "$@" ;;
   cleanup) shift; cmd_cleanup "$@" ;;
   system) shift; cmd_system "$@" ;;
   help | -h | --help) usage ;;

@@ -97,6 +97,7 @@ ducal theme gruvbox        # switch the whole desktop to Gruvbox
 ducal theme tokyo-night    # back to Tokyo Night
 ducal wallpaper ~/me.png   # your own wallpaper, kept across theme switches
 ducal wallpaper reset      # back to each theme's wallpaper
+ducal search tokyo night   # web search in the default browser (Super+B opens a search box)
 ducal system restore       # back to the distribution login screen and boot splash
 ducal cleanup restore-services   # enable the services the cleanup disabled
 ```
@@ -110,6 +111,7 @@ Open a new terminal and reopen Neovim to see every change.
 | Shortcut | Action |
 | --- | --- |
 | `Super+Space` | Launcher |
+| `Super+B` | Search the web (or open an address) in your default browser |
 | `Super+H/J/K/L` | Focus window left / down / up / right (Forge) |
 | `Ctrl+Super+H/J/K/L` | Swap window |
 | `Shift+Super+H/J/K/L` | Move window |
@@ -120,6 +122,17 @@ Open a new terminal and reopen Neovim to see every change.
 ducal moves the lock screen to `Ctrl+Alt+L` and frees `Super+H` because Forge uses
 `Super+H/J/K/L` for focus. It also disables Ubuntu Dock, Tiling Assistant and the
 desktop icons, which clash with this setup.
+
+## Web search
+
+`Super+B` opens a small search box. Press Enter to search in your default browser;
+type an address such as `github.com` or `localhost:3000` to open it directly.
+Google is the default engine. Use another one by writing its URL, with `%s` where
+the query goes, to `~/.config/ducal/search-url`:
+
+```bash
+echo 'https://duckduckgo.com/?q=%s' > ~/.config/ducal/search-url
+```
 
 ## Project layout
 
