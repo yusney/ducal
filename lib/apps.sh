@@ -2,7 +2,7 @@
 # Application installers for ducal. Source after lib/common.sh.
 # Every installer is idempotent: it returns early when the app is already present.
 
-DUCAL_EXTRAS_AVAILABLE=(chrome code docker go rust steam discord)
+DUCAL_EXTRAS_AVAILABLE=(chrome code docker go rust node steam discord)
 DUCAL_FONT_DIR="$HOME/.local/share/fonts/JetBrainsMonoNerd"
 
 # ---------------------------------------------------------------- helpers
@@ -173,6 +173,24 @@ install_extra_rust() {
   has_cmd rustup && return 0
   log_step "Installing Rust (rustup)"
   curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path
+}
+
+install_extra_node() {
+  local fnm_dir="$HOME/.local/share/fnm"
+  if [[ ! -x $fnm_dir/fnm ]]; then
+    log_step "Installing fnm"
+    curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir "$fnm_dir" --skip-shell
+  fi
+  if [[ ! -d $fnm_dir/aliases/default ]]; then
+    log_step "Installing Node.js LTS"
+    FNM_DIR="$fnm_dir" "$fnm_dir/fnm" install --lts
+    FNM_DIR="$fnm_dir" "$fnm_dir/fnm" default lts-latest
+  fi
+  # Shells only read their rc files when interactive; editors, MCP servers and
+  # AI agents start non-interactive processes, so Node goes in the session environment.
+  mkdir -p "$HOME/.config/environment.d"
+  printf '%s\n' '# Managed by ducal: Node.js (fnm default) for every program in the session' \
+    'PATH=${HOME}/.local/share/fnm/aliases/default/bin:${PATH}' > "$HOME/.config/environment.d/60-ducal-node.conf"
 }
 
 install_extra_steam() {
