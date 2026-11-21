@@ -7,7 +7,7 @@ ducal turns a fresh Ubuntu install into a cohesive, themed workspace inspired by
 one color palette shared by the desktop, the terminal, the editor and the tools you
 use every day. Switch the whole desktop to another palette with a single command.
 
-> **Status: work in progress.** Every module except the optional cleanup works today. The remaining modules are listed in the [roadmap](#roadmap).
+> **Status: work in progress.** Every module works today; screenshots are coming. The remaining modules are listed in the [roadmap](#roadmap).
 
 ## What you get
 
@@ -50,7 +50,7 @@ DUCAL_EXTRAS=chrome,code,docker ./install.sh   # or DUCAL_EXTRAS=all / none
 Installing Docker adds your user to the `docker` group, which grants root-equivalent
 access through the Docker daemon.
 
-The last module themes the login screen and the boot splash. It changes system
+The system module themes the login screen and the boot splash. It changes system
 files, so it asks first (or set `DUCAL_SYSTEM=yes` / `no`). Add your own logo next
 to the distribution name with `DUCAL_LOGO=/path/to/logo.svg`. Undo it at any time:
 
@@ -70,6 +70,25 @@ Run or inspect single modules:
 ./install.sh --only config    # run one module
 ```
 
+## Optional cleanup
+
+The last module can slim Ubuntu down. Nothing is removed unless you choose it: the
+installer asks for each group, or answer in advance with
+`DUCAL_CLEANUP=apps,office,telemetry,services` (or `all` / `none`).
+
+| Group | What it does |
+| --- | --- |
+| `apps` | Removes Rhythmbox, Totem, Shotwell, Camera, Transmission, Remmina, Clocks, Characters, Help, USB Creator, Document Scanner, Déjà Dup, Calendar, gedit and Text Editor |
+| `office` | Removes LibreOffice and Thunderbird (both the deb and the snap) |
+| `telemetry` | Removes ubuntu-report, apport, whoopsie and kerneloops |
+| `services` | Disables (does not uninstall) file indexing, printing, 3G/4G modems and network discovery |
+
+Packages are removed with `apt-get remove`, so your documents and settings stay in your
+home folder and `sudo apt install <package>` brings any of them back. Removing default
+apps also removes the `ubuntu-desktop` metapackages, so ducal first marks the rest of
+the desktop as manually installed: a later `apt autoremove` will not touch it.
+Turn the services back on with `ducal cleanup restore-services`.
+
 ## Usage
 
 ```bash
@@ -77,6 +96,7 @@ ducal theme                # list themes, current one marked with *
 ducal theme gruvbox        # switch the whole desktop to Gruvbox
 ducal theme tokyo-night    # back to Tokyo Night
 ducal system restore       # back to the distribution login screen and boot splash
+ducal cleanup restore-services   # enable the services the cleanup disabled
 ```
 
 A theme switch updates kitty (live), fish, Starship, Neovim, yazi, btop, lazygit, VS Code,
@@ -125,7 +145,7 @@ Then run `ducal theme <name>`.
 - [x] GNOME setup (extensions, dock, top bar, Forge, launcher, shortcuts)
 - [x] Theme assets (GTK themes, cursors, icons, wallpapers)
 - [x] Login screen and boot splash, with one-command restore
-- [ ] Optional cleanup of preinstalled software you do not need
+- [x] Optional cleanup of preinstalled software you do not need
 - [ ] Screenshots
 
 ## Development

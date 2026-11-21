@@ -462,6 +462,117 @@ test_system_restore_returns_to_ubuntu_defaults() {
   assert_contains "$STUB_LOG" "update-initramfs -u"
 }
 
+# ---------------------------------------------------------------- cleanup
+stub_cleanup_tools() {
+  stub_package_tools
+  local s="$SANDBOX/stubs" c
+  for c in snap systemctl; do
+    printf '#!/usr/bin/env bash\necho "%s $*" >> "$STUB_LOG"\n[[ $1 == list ]] && echo "thunderbird"\n[[ $1 == is-enabled ]] && echo enabled\nexit 0\n' "$c" > "$s/$c"
+  done
+  chmod +x "$s"/*
+}
+
+test_cleanup_apps_removes_only_installed_packages() {
+  stub_cleanup_tools
+  printf 'rhythmbox\ngedit\n' > "$SANDBOX/installed"
+  DUCAL_CLEANUP=apps "$ROOT/install.sh" --only cleanup >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "apt-get remove -y rhythmbox gedit"
+  assert_not_contains "$STUB_LOG" "totem"
+  assert_not_contains "$STUB_LOG" "autoremove"
+}
+
+test_cleanup_protects_desktop_packages_from_autoremove() {
+  stub_cleanup_tools
+  printf 'rhythmbox\ngnome-shell\nnautilus\n' > "$SANDBOX/installed"
+    # Like the real apt-cache, answers in the system language unless LC_ALL=C
+  cat > "$SANDBOX/stubs/apt-cache" <<'EOS'
+#!/usr/bin/env bash
+echo "apt-cache $*" >> "$STUB_LOG"
+d=Depends r=Recommends; [[ ${LC_ALL:-} == C ]] || { d=Depende r=Recomienda; }
+printf "ubuntu-desktop\n  $d: gnome-shell\n    gnome-shell:i386\n |$r: nautilus\n  $r: rhythmbox\n  $r: <virtual-thing>\n"
+EOS
+  printf '#!/usr/bin/env bash\necho "apt-mark $*" >> "$STUB_LOG"\n' > "$SANDBOX/stubs/apt-mark"
+  chmod +x "$SANDBOX/stubs/apt-cache" "$SANDBOX/stubs/apt-mark"
+  DUCAL_CLEANUP=apps "$ROOT/install.sh" --only cleanup >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "apt-mark manual gnome-shell nautilus"
+  assert_not_contains "$STUB_LOG" "manual gnome-shell nautilus rhythmbox"
+  local mark remove
+  mark=$(grep -n 'apt-mark manual' "$STUB_LOG" | cut -d: -f1); remove=$(grep -n 'apt-get remove' "$STUB_LOG" | cut -d: -f1)
+  [[ -n $mark && -n $remove && $mark -lt $remove ]] || fail "apt-mark must run before apt-get remove"
+}
+
+test_cleanup_office_removes_libreoffice_and_both_thunderbirds() {
+  stub_cleanup_tools
+  printf 'libreoffice-common\nlibreoffice-core\nthunderbird\n' > "$SANDBOX/installed"
+  DUCAL_CLEANUP=office "$ROOT/install.sh" --only cleanup >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "apt-get remove -y libreoffice-common libreoffice-core thunderbird"
+  assert_contains "$STUB_LOG" "snap remove thunderbird"
+}
+
+test_cleanup_telemetry_removes_reporting_tools() {
+  stub_cleanup_tools
+  printf 'ubuntu-report\napport\nwhoopsie\nkerneloops\n' > "$SANDBOX/installed"
+  DUCAL_CLEANUP=telemetry "$ROOT/install.sh" --only cleanup >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "apt-get remove -y ubuntu-report apport whoopsie kerneloops"
+}
+
+test_cleanup_services_are_disabled_not_removed() {
+  stub_cleanup_tools
+  printf 'cups\n' > "$SANDBOX/installed"
+  DUCAL_CLEANUP=services "$ROOT/install.sh" --only cleanup >/dev/null 2>&1
+  local u
+  for u in cups.service cups.socket cups.path cups-browsed.service ModemManager.service avahi-daemon.service avahi-daemon.socket; do
+    assert_contains "$STUB_LOG" "systemctl disable --now $u"
+  done
+  assert_contains "$STUB_LOG" "systemctl --user mask --now tracker-miner-fs-3.service"
+  assert_not_contains "$STUB_LOG" "apt-get remove"
+}
+
+test_cleanup_does_nothing_by_default_without_a_terminal() {
+  stub_cleanup_tools
+  printf 'rhythmbox\n' > "$SANDBOX/installed"
+  "$ROOT/install.sh" --only cleanup </dev/null >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "apt-get remove"
+  assert_not_contains "$STUB_LOG" "systemctl disable"
+}
+
+test_cleanup_rejects_unknown_group() {
+  stub_cleanup_tools
+  DUCAL_CLEANUP=apps,nope "$ROOT/install.sh" --only cleanup >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "1"
+  assert_not_contains "$STUB_LOG" "apt-get remove"
+}
+
+test_cleanup_services_continue_when_one_unit_is_missing() {
+  stub_cleanup_tools
+  # cups-browsed is not installed: systemctl fails for it only
+  printf '#!/usr/bin/env bash\necho "systemctl $*" >> "$STUB_LOG"\n[[ $* == *cups-browsed* ]] && exit 1\nexit 0\n' > "$SANDBOX/stubs/systemctl"
+  DUCAL_CLEANUP=services "$ROOT/install.sh" --only cleanup >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "systemctl disable --now cups.service"
+  assert_contains "$STUB_LOG" "systemctl disable --now ModemManager.service"
+}
+
+test_cleanup_restore_services_reports_failure() {
+  stub_cleanup_tools
+  printf '#!/usr/bin/env bash\n[[ $1 == --user ]] && exit 1\nexit 0\n' > "$SANDBOX/stubs/systemctl"
+  local out
+  out=$("$ROOT/bin/ducal" cleanup restore-services 2>&1); local rc=$?
+  [[ $rc -ne 0 ]] || fail "must fail when a unit cannot be restored"
+  [[ $out != *"Services enabled again"* ]] || fail "must not report success: $out"
+}
+
+test_cleanup_restore_services_reenables_them() {
+  stub_cleanup_tools
+  "$ROOT/bin/ducal" cleanup restore-services >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "systemctl enable --now cups.service"
+  assert_contains "$STUB_LOG" "systemctl enable --now cups-browsed.service"
+  assert_contains "$STUB_LOG" "systemctl --user unmask tracker-miner-fs-3.service"
+}
+
 # ---------------------------------------------------------------- run
 ORIG_PATH=$PATH
 ORIG_HOME=$HOME

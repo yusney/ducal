@@ -3,6 +3,7 @@
 #   ducal theme           list themes (current one marked with *)
 #   ducal theme <name>    switch the whole desktop to a theme
 #   ducal system restore  restore the distribution login screen and boot splash
+#   ducal cleanup restore-services  enable the services the cleanup disabled
 #   ducal help            show this help
 set -uo pipefail
 
@@ -18,7 +19,7 @@ FALLBACK_GTK="Tokyonight-Dark"
 notes=()
 note() { notes+=("$1"); }
 
-usage() { sed -n '2,6p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,7p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
 
 current_theme() { [[ -f $CURRENT_FILE ]] && cat "$CURRENT_FILE"; }
 
@@ -154,8 +155,22 @@ cmd_system() {
   esac
 }
 
+cmd_cleanup() {
+  case ${1:-} in
+    restore-services)
+      # shellcheck source=../lib/apps.sh
+      source "$DUCAL_ROOT/lib/apps.sh"
+      # shellcheck source=../lib/cleanup.sh
+      source "$DUCAL_ROOT/lib/cleanup.sh"
+      cleanup_restore_services
+      ;;
+    *) echo "Usage: ducal cleanup restore-services" >&2; return 1 ;;
+  esac
+}
+
 case ${1:-help} in
   theme) shift; cmd_theme "$@" ;;
+  cleanup) shift; cmd_cleanup "$@" ;;
   system) shift; cmd_system "$@" ;;
   help | -h | --help) usage ;;
   *) echo "Unknown command: $1" >&2; usage >&2; exit 1 ;;
