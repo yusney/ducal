@@ -18,8 +18,9 @@
 
 ## Workspaces
 
-There are four fixed workspaces, shown as numbers in the top bar. The active one is
-highlighted; workspaces with windows are brighter than empty ones.
+There are four fixed workspaces, shown as numbers in the top bar: the active one is
+filled with the accent color, workspaces with windows have a grey chip, and empty
+ones are plain.
 
 | Shortcut | Action |
 | --- | --- |
