@@ -170,6 +170,100 @@ test_config_module_skips_the_status_line_without_ccstatusline() {
   [[ ! -e $HOME/.claude/settings.json ]] || fail "settings.json must not be created without ccstatusline"
 }
 
+# ---------------------------------------------------------------- preflight
+# A healthy Ubuntu 24.04 x86_64 with sudo, internet and every prerequisite.
+# Tweak: $SANDBOX/arch, $SANDBOX/uid, $SANDBOX/sudo-fails, $SANDBOX/offline, $SANDBOX/installed
+stub_preflight() {
+  stub_package_tools
+  local s="$SANDBOX/stubs"
+  printf '%s\n' curl git python3 ca-certificates whiptail > "$SANDBOX/installed"
+  echo x86_64 > "$SANDBOX/arch"; echo 1000 > "$SANDBOX/uid"
+  printf '#!/usr/bin/env bash\n[[ $1 == -m ]] && cat "%s/arch" || /usr/bin/uname "$@"\n' "$SANDBOX" > "$s/uname"
+  printf '#!/usr/bin/env bash\n[[ $1 == -u ]] && cat "%s/uid" || /usr/bin/id "$@"\n' "$SANDBOX" > "$s/id"
+  printf '#!/usr/bin/env bash\nif [[ $1 == -v ]]; then echo "sudo -v" >> "$STUB_LOG"; [[ ! -f "%s/sudo-fails" ]]; exit; fi\n"$@"\n' "$SANDBOX" > "$s/sudo"
+  printf '#!/usr/bin/env bash\necho "curl $*" >> "$STUB_LOG"\n[[ ! -f "%s/offline" ]]\n' "$SANDBOX" > "$s/curl"
+  chmod +x "$s"/*
+  export DUCAL_SYSROOT="$SANDBOX/root"
+  mkdir -p "$DUCAL_SYSROOT/etc"
+  printf 'NAME="Ubuntu"\nVERSION_ID="24.04"\nID=ubuntu\n' > "$DUCAL_SYSROOT/etc/os-release"
+}
+
+# preflight CODE — runs CODE with lib/preflight.sh loaded
+preflight() { bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; source '$ROOT/lib/preflight.sh'; $1" </dev/null; }
+
+test_preflight_passes_on_a_ready_system() {
+  stub_preflight
+  preflight preflight_system >"$SANDBOX/out" 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$SANDBOX/out" "Ubuntu 24.04"
+  assert_contains "$STUB_LOG" "sudo -v"
+  assert_contains "$STUB_LOG" "curl -fsS --max-time 10 -o /dev/null https://github.com"
+  assert_not_contains "$STUB_LOG" "apt-get"
+}
+
+test_preflight_installs_missing_prerequisites() {
+  stub_preflight
+  printf '%s\n' curl python3 ca-certificates > "$SANDBOX/installed"
+  preflight preflight_system >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "apt-get update"
+  assert_contains "$STUB_LOG" "apt-get install -y git whiptail"
+}
+
+test_preflight_stops_on_an_unsupported_system() {
+  stub_preflight
+  local err
+  echo aarch64 > "$SANDBOX/arch"
+  err=$(preflight preflight_system 2>&1); assert_eq "$?" "1" "arch"
+  [[ $err == *"x86_64"*"aarch64"* ]] || fail "arch message: $err"
+  echo x86_64 > "$SANDBOX/arch"; echo 0 > "$SANDBOX/uid"
+  err=$(preflight preflight_system 2>&1); assert_eq "$?" "1" "root"
+  [[ $err == *"not as root"* ]] || fail "root message: $err"
+  echo 1000 > "$SANDBOX/uid"; touch "$SANDBOX/sudo-fails"
+  err=$(preflight preflight_system 2>&1); assert_eq "$?" "1" "sudo"
+  [[ $err == *"sudo"* ]] || fail "sudo message: $err"
+  rm "$SANDBOX/sudo-fails"; touch "$SANDBOX/offline"
+  err=$(preflight preflight_system 2>&1); assert_eq "$?" "1" "offline"
+  [[ $err == *"internet"* ]] || fail "offline message: $err"
+  # nothing was installed on the way out
+  assert_not_contains "$STUB_LOG" "apt-get install"
+}
+
+test_preflight_needs_apt() {
+  stub_preflight
+  rm "$SANDBOX/stubs/apt-get"
+  local err; err=$(PATH="$SANDBOX/stubs:/bin/nonexistent" /bin/bash -c "PATH='$SANDBOX/stubs'; source '$ROOT/lib/common.sh'; source '$ROOT/lib/groups.sh'; source '$ROOT/lib/preflight.sh'; preflight_system" 2>&1); local rc=$?
+  assert_eq "$rc" "1"
+  [[ $err == *"apt"* ]] || fail "apt message: $err"
+}
+
+test_preflight_warns_on_an_untested_version() {
+  stub_preflight
+  printf 'NAME="Ubuntu"\nVERSION_ID="22.04"\nID=ubuntu\n' > "$DUCAL_SYSROOT/etc/os-release"
+  preflight preflight_system >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$SANDBOX/err" "22.04 is untested"
+}
+
+test_preflight_needs_gnome_for_the_desktop_groups() {
+  stub_preflight
+  local err
+  err=$(PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_NO_GNOME=1 DUCAL_GROUPS_SELECTED="terminal gnome" preflight preflight_groups 2>&1); assert_eq "$?" "1"
+  [[ $err == *"GNOME"*"--profile dev"* ]] || fail "gnome message: $err"
+  DUCAL_NO_GNOME=1 DUCAL_GROUPS_SELECTED="terminal languages" preflight preflight_groups >/dev/null 2>&1; assert_eq "$?" "0" "dev groups need no GNOME"
+}
+
+test_install_runs_the_preflight_before_anything() {
+  stub_preflight
+  echo aarch64 > "$SANDBOX/arch"
+  DUCAL_GROUPS=terminal "$ROOT/install.sh" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "1"
+  assert_not_contains "$STUB_LOG" "apt-get"
+  # --only keeps running a module without the checks
+  DUCAL_GROUPS_SELECTED="languages" "$ROOT/install.sh" --only config >/dev/null 2>&1
+  assert_eq "$?" "0" "--only skips the preflight"
+}
+
 # ---------------------------------------------------------------- boot
 # fake_ducal_repo DIR — a git repo whose install.sh logs its arguments
 fake_ducal_repo() {
