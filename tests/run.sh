@@ -181,7 +181,8 @@ stub_preflight() {
   printf '#!/usr/bin/env bash\n[[ $1 == -m ]] && cat "%s/arch" || /usr/bin/uname "$@"\n' "$SANDBOX" > "$s/uname"
   printf '#!/usr/bin/env bash\n[[ $1 == -u ]] && cat "%s/uid" || /usr/bin/id "$@"\n' "$SANDBOX" > "$s/id"
   printf '#!/usr/bin/env bash\nif [[ $1 == -v ]]; then echo "sudo -v" >> "$STUB_LOG"; [[ ! -f "%s/sudo-fails" ]]; exit; fi\n"$@"\n' "$SANDBOX" > "$s/sudo"
-  printf '#!/usr/bin/env bash\necho "curl $*" >> "$STUB_LOG"\n[[ ! -f "%s/offline" ]]\n' "$SANDBOX" > "$s/curl"
+  # with -I, prints the HTTP headers in $SANDBOX/headers (the server Date)
+  printf '#!/usr/bin/env bash\necho "curl $*" >> "$STUB_LOG"\n[[ ! -f "%s/offline" ]] || exit 1\n[[ $1 == -*I* && -f "%s/headers" ]] && cat "%s/headers"\nexit 0\n' "$SANDBOX" "$SANDBOX" "$SANDBOX" > "$s/curl"
   chmod +x "$s"/*
   export DUCAL_SYSROOT="$SANDBOX/root"
   mkdir -p "$DUCAL_SYSROOT/etc"
@@ -199,6 +200,24 @@ test_preflight_passes_on_a_ready_system() {
   assert_contains "$STUB_LOG" "sudo -v"
   assert_contains "$STUB_LOG" "curl -fsS --max-time 10 -o /dev/null https://github.com"
   assert_not_contains "$STUB_LOG" "apt-get"
+}
+
+# apt rejects package lists "not valid yet" when the clock is behind
+test_preflight_stops_when_the_clock_is_off() {
+  stub_preflight
+  printf 'HTTP/2 200\r\ndate: %s\r\n' "$(LC_ALL=C date -u -d '+3 hours' '+%a, %d %b %Y %H:%M:%S GMT')" > "$SANDBOX/headers"
+  preflight preflight_system >"$SANDBOX/out" 2>&1; local rc=$?
+  assert_eq "$rc" "1"
+  assert_contains "$SANDBOX/out" "Your clock is off by 180 minutes"
+  assert_contains "$SANDBOX/out" "sudo timedatectl set-ntp true"
+}
+
+test_preflight_accepts_a_clock_in_time() {
+  stub_preflight
+  printf 'HTTP/2 200\r\ndate: %s\r\n' "$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S GMT')" > "$SANDBOX/headers"
+  preflight preflight_system >"$SANDBOX/out" 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$SANDBOX/out" "Clock in time"
 }
 
 test_preflight_installs_missing_prerequisites() {
@@ -492,6 +511,23 @@ test_apps_module_skips_tools_already_installed() {
   assert_eq "$rc" "0"
   assert_not_contains "$STUB_LOG" "curl"
   assert_not_contains "$STUB_LOG" "apt-get install"
+}
+
+# On a fresh system ~/.local/bin is not on PATH until the next login: what the
+# installer puts there must still be found (ya right after yazi, reruns skip tools)
+test_installer_finds_tools_in_local_bin() {
+  stub_package_tools
+  printf '%s\n' git curl unzip build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
+  mkdir -p "$HOME/.local/bin"
+  for c in nvim starship lazygit yazi ya fd claude opencode; do
+    printf '#!/usr/bin/env bash\necho "%s $*" >> "$STUB_LOG"\n' "$c" > "$HOME/.local/bin/$c"
+    chmod +x "$HOME/.local/bin/$c"
+  done
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_GROUPS_SELECTED="terminal" DUCAL_EXTRAS=none \
+    "$ROOT/install.sh" --only apps >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "curl"
+  assert_contains "$STUB_LOG" "ya pkg add BennyOe/tokyo-night"
 }
 
 test_apps_module_installs_only_the_chosen_groups() {
