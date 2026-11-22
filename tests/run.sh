@@ -474,6 +474,15 @@ test_parse_extras_rejects_unknown_names() {
   [[ $err == *"Unknown extra: nope"* ]] || fail "stderr: $err"
 }
 
+# The .deb needs a newer glibc than Ubuntu 22.04 has: the static musl build runs anywhere
+test_yazi_installs_the_static_build_not_the_deb() {
+  stub_package_tools
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_yazi" >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "yazi-x86_64-unknown-linux-musl.zip"
+  assert_not_contains "$STUB_LOG" "yazi.deb"
+  assert_not_contains "$STUB_LOG" "api.github.com/repos/sxyazi"
+}
+
 test_apps_module_skips_tools_already_installed() {
   stub_package_tools
   printf '%s\n' git curl unzip fontconfig build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"

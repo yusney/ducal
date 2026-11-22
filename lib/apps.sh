@@ -92,8 +92,14 @@ install_lazygit() {
 install_yazi() {
   if ! has_cmd yazi; then
     require_x86_64
+    local tmp; tmp=$(mktemp -d)
     log_step "Installing yazi"
-    install_deb_url yazi "$(github_asset_url sxyazi/yazi 'x86_64-unknown-linux-gnu\.deb$')"
+    # The static musl build: the .deb needs glibc 2.39, newer than Ubuntu 22.04 has
+    download "https://github.com/sxyazi/yazi/releases/latest/download/yazi-x86_64-unknown-linux-musl.zip" "$tmp/yazi.zip"
+    unzip -oq "$tmp/yazi.zip" -d "$tmp"
+    mkdir -p "$HOME/.local/bin"
+    install -m 755 "$tmp"/yazi-x86_64-unknown-linux-musl/{yazi,ya} "$HOME/.local/bin/"
+    rm -rf "$tmp"
   fi
   # Color flavors used by `ducal theme`
   local flavors="$HOME/.config/yazi/flavors"
