@@ -18,15 +18,6 @@ apt_install() {
   as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
 }
 
-# github_asset_url OWNER/REPO REGEX — download URL of the latest release asset matching REGEX.
-github_asset_url() {
-  local url
-  url=$(curl -fsSL "https://api.github.com/repos/$1/releases/latest" |
-    grep -oE '"browser_download_url": *"[^"]+"' | cut -d'"' -f4 | grep -E "$2" | head -1)
-  [[ -n $url ]] || die "No release asset matching '$2' in $1"
-  echo "$url"
-}
-
 # download URL DEST
 download() { curl -fsSL --retry 3 -o "$2" "$1" || die "Download failed: $1"; }
 
@@ -82,9 +73,16 @@ install_starship() {
 install_lazygit() {
   has_cmd lazygit && return 0
   require_x86_64
-  local tmp; tmp=$(mktemp -d)
+  local releases=https://github.com/jesseduffield/lazygit/releases release_url tag tmp
   log_step "Installing lazygit"
-  download "$(github_asset_url jesseduffield/lazygit '_linux_x86_64\.tar\.gz$')" "$tmp/lg.tar.gz"
+  # Resolve the version via the public release redirect, without the GitHub API.
+  release_url=$(curl -fsSIL --retry 3 -o /dev/null -w '%{url_effective}' "$releases/latest") ||
+    die "Could not resolve the latest Lazygit release: $releases/latest"
+  tag=${release_url##*/}
+  [[ $release_url == "$releases/tag/$tag" && $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+    die "Unexpected Lazygit release URL: $release_url"
+  tmp=$(mktemp -d)
+  download "$releases/download/$tag/lazygit_${tag#v}_linux_x86_64.tar.gz" "$tmp/lg.tar.gz"
   mkdir -p "$HOME/.local/bin" && tar -xzf "$tmp/lg.tar.gz" -C "$HOME/.local/bin" lazygit
   rm -rf "$tmp"
 }

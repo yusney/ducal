@@ -57,6 +57,7 @@ cd ~/.local/share/ducal
 
 Log out and back in when it finishes. To update ducal later, run the same `curl`
 line again: it pulls the latest version and reruns the installer, which keeps your files.
+Lazygit downloads use the public GitHub releases page and do not require a GitHub API token.
 
 ### Choose what to install
 

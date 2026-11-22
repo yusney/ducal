@@ -493,6 +493,83 @@ test_parse_extras_rejects_unknown_names() {
   [[ $err == *"Unknown extra: nope"* ]] || fail "stderr: $err"
 }
 
+stub_lazygit_install() {
+  stub_package_tools
+  printf '%s\n' git curl unzip build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
+  for c in nvim starship yazi ya fd claude opencode; do fake_cmd "$c"; done
+  printf '#!/usr/bin/env bash\necho "lazygit fixture"\n' > "$SANDBOX/lazygit"
+  chmod +x "$SANDBOX/lazygit"
+  tar -czf "$SANDBOX/lazygit.tar.gz" -C "$SANDBOX" lazygit
+  export LAZYGIT_FIXTURE="$SANDBOX/lazygit.tar.gz"
+  cat > "$SANDBOX/stubs/curl" <<'EOF'
+#!/usr/bin/env bash
+echo "curl $*" >> "$STUB_LOG"
+case "${@: -1}" in
+  https://github.com/jesseduffield/lazygit/releases/latest)
+    if [[ ${LAZYGIT_RELEASE_BLOCKED:-0} == 1 ]]; then
+      echo "curl: (22) The requested URL returned error: 403" >&2
+      exit 22
+    fi
+    printf '%s' https://github.com/jesseduffield/lazygit/releases/tag/v0.66.3 ;;
+  https://github.com/jesseduffield/lazygit/releases/download/v0.66.3/lazygit_0.66.3_linux_x86_64.tar.gz)
+    cp "$LAZYGIT_FIXTURE" "${@: -2:1}" ;;
+  *) echo "curl: (22) The requested URL returned error: 403" >&2; exit 22 ;;
+esac
+EOF
+}
+
+test_apps_installs_lazygit_without_github_api_and_skips_it_on_rerun() {
+  stub_lazygit_install
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_GROUPS_SELECTED=terminal DUCAL_EXTRAS=none \
+    "$ROOT/install.sh" --only apps >"$SANDBOX/out" 2>"$SANDBOX/err"
+  assert_eq "$?" "0"
+  assert_contains "$SANDBOX/out" "Terminal tools ready"
+  assert_eq "$("$HOME/.local/bin/lazygit")" "lazygit fixture"
+  assert_contains "$STUB_LOG" "lazygit_0.66.3_linux_x86_64.tar.gz"
+  assert_not_contains "$STUB_LOG" "api.github.com"
+
+  : > "$STUB_LOG"
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_GROUPS_SELECTED=terminal DUCAL_EXTRAS=none \
+    "$ROOT/install.sh" --only apps >"$SANDBOX/out" 2>"$SANDBOX/err"
+  assert_eq "$?" "0"
+  assert_eq "$("$HOME/.local/bin/lazygit")" "lazygit fixture"
+  assert_not_contains "$STUB_LOG" "curl"
+}
+
+test_apps_reports_lazygit_release_failure_without_downloading_an_empty_url() {
+  stub_lazygit_install
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_GROUPS_SELECTED=terminal DUCAL_EXTRAS=none LAZYGIT_RELEASE_BLOCKED=1 \
+    "$ROOT/install.sh" --only apps >"$SANDBOX/out" 2>"$SANDBOX/err"
+  assert_eq "$?" "1"
+  assert_contains "$SANDBOX/err" "403"
+  assert_contains "$SANDBOX/err" "Could not resolve the latest Lazygit release"
+  assert_eq "$(grep -c '^curl ' "$STUB_LOG")" "1"
+  [[ ! -e $HOME/.local/bin/lazygit ]] || fail "Lazygit was installed despite release lookup failure"
+}
+
+test_apps_rejects_invalid_lazygit_release_redirects() {
+  stub_lazygit_install
+  local releases=https://github.com/jesseduffield/lazygit/releases target
+  local -x LAZYGIT_REDIRECT
+  cat > "$SANDBOX/stubs/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '<%s>\n' "${@: -1}" >> "$STUB_LOG"
+printf '%s' "$LAZYGIT_REDIRECT"
+EOF
+  for target in '' "$releases/latest" \
+    'https://example.invalid/jesseduffield/lazygit/releases/tag/v12.34.56' \
+    "$releases/tag/v12.34.56-rc.1"; do
+    LAZYGIT_REDIRECT=$target
+    : > "$STUB_LOG"
+    PATH="$SANDBOX/stubs:/usr/bin:/bin" DUCAL_GROUPS_SELECTED=terminal DUCAL_EXTRAS=none \
+      "$ROOT/install.sh" --only apps >"$SANDBOX/out" 2>"$SANDBOX/err"
+    assert_eq "$?" "1"
+    assert_contains "$SANDBOX/err" "Unexpected Lazygit release URL: $target"
+    assert_eq "$(cat "$STUB_LOG")" "<$releases/latest>"
+    [[ ! -e $HOME/.local/bin/lazygit ]] || fail "Lazygit was installed despite an invalid redirect"
+  done
+}
+
 # The .deb needs a newer glibc than Ubuntu 22.04 has: the static musl build runs anywhere
 test_yazi_installs_the_static_build_not_the_deb() {
   stub_package_tools
