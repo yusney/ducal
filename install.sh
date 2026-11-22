@@ -10,6 +10,11 @@ set -euo pipefail
 
 DUCAL_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export DUCAL_ROOT
+# Tools go to ~/.local/bin, which a fresh system puts on PATH only at the next login
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
 # shellcheck source=lib/common.sh
 source "$DUCAL_ROOT/lib/common.sh"
 # shellcheck source=lib/groups.sh

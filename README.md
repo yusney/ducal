@@ -31,7 +31,9 @@ use every day. Switch the whole desktop to another palette with a single command
 The installer checks all of this before it installs anything. It also installs what it
 needs to start (curl, git, python3, CA certificates and whiptail) and stops with the
 reason when something is missing: no apt, a CPU other than x86_64, running as root, no
-sudo, no internet, or the `gnome` / `system` groups chosen without a GNOME desktop.
+sudo, no internet, a clock more than 5 minutes off (apt rejects package lists with a
+wrong date: fix it with `sudo timedatectl set-ntp true`), or the `gnome` / `system`
+groups chosen without a GNOME desktop.
 The GNOME check runs right after the menu, once those prerequisites are in place and
 before any group is installed. Another Ubuntu version or less than 5 GB free only shows
 a warning.

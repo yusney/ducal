@@ -9,8 +9,23 @@ source "$DUCAL_ROOT/lib/apps.sh"
 # What the installer needs before any module runs (whiptail draws the menus)
 DUCAL_PREREQUISITES=(curl git python3 ca-certificates whiptail)
 DUCAL_MIN_FREE_GB=5
+DUCAL_MAX_CLOCK_SKEW=300 # seconds
 
 no_internet() { die "No internet connection (github.com is unreachable): ducal downloads its apps and themes"; }
+
+# check_clock — a clock off by minutes makes apt reject its package lists
+# ("not valid yet"): compare it with the Date github.com sends.
+check_clock() {
+  local remote skew
+  remote=$(curl -fsSI --max-time 10 https://github.com 2>/dev/null | sed -n 's/^[Dd]ate: *//p' | tr -d '\r') || remote=""
+  [[ -n $remote ]] && remote=$(date -d "$remote" +%s 2>/dev/null) || return 0
+  skew=$(($(date +%s) - remote))
+  skew=${skew#-}
+  if ((skew > DUCAL_MAX_CLOCK_SKEW)); then
+    die "Your clock is off by $((skew / 60)) minutes: apt rejects package lists with a wrong date. Fix it with: sudo timedatectl set-ntp true (in a virtual machine, also turn on time sync with the host), then run the installer again"
+  fi
+  log_ok "Clock in time"
+}
 
 # preflight_system — run before the menu.
 preflight_system() {
@@ -57,6 +72,8 @@ preflight_system() {
     apt_install "${missing[@]}" || die "Could not install ${missing[*]}"
   fi
   log_ok "Prerequisites ready: ${DUCAL_PREREQUISITES[*]}"
+
+  check_clock
 
   local free_kb
   # only a warning: a failing df must not stop the install
