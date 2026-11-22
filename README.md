@@ -45,7 +45,8 @@ cd ~/.local/share/ducal
 ./install.sh
 ```
 
-Log out and back in when it finishes.
+Log out and back in when it finishes. To update ducal later, run the same `curl`
+line again: it pulls the latest version and reruns the installer, which keeps your files.
 
 ### Choose what to install
 
@@ -71,6 +72,13 @@ DUCAL_GROUPS=terminal,languages ./install.sh   # or DUCAL_GROUPS=all
 ```
 
 Without a terminal and no answer, the installer uses `desktop` (`dev` on WSL).
+
+The same answers work with the one-line install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yusney/ducal/main/boot.sh | bash -s -- --profile dev
+curl -fsSL https://raw.githubusercontent.com/yusney/ducal/main/boot.sh | DUCAL_GROUPS=terminal,languages bash
+```
 
 The installer is **idempotent**: running it again is safe. Any file of yours that
 ducal replaces is kept next to it as `<file>.ducal-backup-<timestamp>`.
