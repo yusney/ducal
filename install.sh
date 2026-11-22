@@ -14,6 +14,8 @@ export DUCAL_ROOT
 source "$DUCAL_ROOT/lib/common.sh"
 # shellcheck source=lib/groups.sh
 source "$DUCAL_ROOT/lib/groups.sh"
+# shellcheck source=lib/preflight.sh
+source "$DUCAL_ROOT/lib/preflight.sh"
 
 modules() { find "$DUCAL_ROOT/install" -maxdepth 1 -name '[0-9][0-9]-*.sh' | sort; }
 module_name() { basename "$1" .sh | sed -E 's/^[0-9]+-//'; }
@@ -51,9 +53,9 @@ main() {
       run_module "$match"
       ;;
     "")
-      [[ -f /etc/os-release ]] && grep -q '^ID=ubuntu' /etc/os-release ||
-        log_warn "ducal targets Ubuntu; continuing anyway"
+      preflight_system
       select_install || die "Nothing installed"
+      preflight_groups
       log_step "Installing: ${DUCAL_GROUPS_SELECTED:-nothing}"
       while read -r f; do run_module "$f"; done < <(modules)
       log_step "Done. Log out and back in to load every change."
