@@ -253,6 +253,40 @@ test_preflight_needs_gnome_for_the_desktop_groups() {
   DUCAL_NO_GNOME=1 DUCAL_GROUPS_SELECTED="terminal languages" preflight preflight_groups >/dev/null 2>&1; assert_eq "$?" "0" "dev groups need no GNOME"
 }
 
+test_preflight_install_with_gnome_groups_changes_nothing() {
+  stub_preflight
+  DUCAL_NO_GNOME=1 "$ROOT/install.sh" --profile desktop >/dev/null 2>"$SANDBOX/err"; assert_eq "$?" "1"
+  assert_contains "$SANDBOX/err" "--profile dev"
+  assert_not_contains "$STUB_LOG" "apt-get"
+  [[ -z $(ls -A "$HOME") ]] || fail "HOME changed: $(ls -A "$HOME")"
+}
+
+test_preflight_wsl_desktop_profile_drops_gnome() {
+  stub_preflight
+  DUCAL_WSL=1 DUCAL_NO_GNOME=1 DUCAL_PROFILE=desktop preflight 'select_install; preflight_groups' >/dev/null 2>&1
+  assert_eq "$?" "0"
+}
+
+test_preflight_offline_with_a_missing_prerequisite_installs_nothing() {
+  stub_preflight
+  sed -i '/^whiptail$/d' "$SANDBOX/installed"; touch "$SANDBOX/offline"
+  preflight preflight_system >/dev/null 2>&1; assert_eq "$?" "1"
+  assert_not_contains "$STUB_LOG" "apt-get"
+}
+
+test_preflight_low_disk_only_warns() {
+  stub_preflight
+  printf '#!/usr/bin/env bash\necho h\necho "/dev/x 1 1 1000 99%% /"\n' > "$SANDBOX/stubs/df"; chmod +x "$SANDBOX/stubs/df"
+  preflight preflight_system >/dev/null 2>"$SANDBOX/err"; assert_eq "$?" "0"
+  assert_contains "$SANDBOX/err" "Less than 5 GB free"
+}
+
+test_preflight_disk_check_failure_does_not_stop_the_install() {
+  stub_preflight
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$SANDBOX/stubs/df"; chmod +x "$SANDBOX/stubs/df"
+  preflight 'set -euo pipefail; preflight_system' >/dev/null 2>&1; assert_eq "$?" "0"
+}
+
 test_install_runs_the_preflight_before_anything() {
   stub_preflight
   echo aarch64 > "$SANDBOX/arch"

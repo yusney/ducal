@@ -28,11 +28,13 @@ use every day. Switch the whole desktop to another palette with a single command
 - A user with `sudo` access
 - An internet connection (packages and third-party assets are downloaded at install time)
 
-The installer checks all of this before it changes anything. It also installs what it
+The installer checks all of this before it installs anything. It also installs what it
 needs to start (curl, git, python3, CA certificates and whiptail) and stops with the
 reason when something is missing: no apt, a CPU other than x86_64, running as root, no
 sudo, no internet, or the `gnome` / `system` groups chosen without a GNOME desktop.
-Another Ubuntu version or less than 5 GB free only shows a warning.
+The GNOME check runs right after the menu, once those prerequisites are in place and
+before any group is installed. Another Ubuntu version or less than 5 GB free only shows
+a warning.
 
 ## Install
 

@@ -10,6 +10,8 @@ source "$DUCAL_ROOT/lib/apps.sh"
 DUCAL_PREREQUISITES=(curl git python3 ca-certificates whiptail)
 DUCAL_MIN_FREE_GB=5
 
+no_internet() { die "No internet connection (github.com is unreachable): ducal downloads its apps and themes"; }
+
 # preflight_system — run before the menu.
 preflight_system() {
   log_step "Checking your system"
@@ -28,16 +30,25 @@ preflight_system() {
     version=$(sed -n 's/^VERSION_ID=//p' "$os_release" | tr -d '"')
   fi
   name="${id:-unknown} ${version}"
+  name=${name^}
   if [[ $id != ubuntu ]]; then
     log_warn "ducal targets Ubuntu, this is $name: continuing, but expect surprises"
   elif [[ $version != 24.04 ]]; then
     log_warn "Ubuntu $version is untested (ducal targets 24.04): continuing anyway"
   fi
-  log_ok "System: ${name^} $arch"
+  log_ok "System: ${name% } $arch"
 
   has_cmd sudo || die "sudo not found: install it, or ask an administrator to give your user sudo access"
   sudo -v || die "Your user cannot use sudo: ducal needs it to install packages"
   log_ok "sudo works"
+
+  # Before installing anything: without curl yet, bash's own /dev/tcp checks the connection
+  if has_cmd curl; then
+    curl -fsS --max-time 10 -o /dev/null https://github.com || no_internet
+  else
+    timeout 10 bash -c 'exec 3<>/dev/tcp/github.com/443' 2>/dev/null || no_internet
+  fi
+  log_ok "Internet connection"
 
   local missing=() p
   for p in "${DUCAL_PREREQUISITES[@]}"; do is_pkg_installed "$p" || missing+=("$p"); done
@@ -47,12 +58,9 @@ preflight_system() {
   fi
   log_ok "Prerequisites ready: ${DUCAL_PREREQUISITES[*]}"
 
-  curl -fsS --max-time 10 -o /dev/null https://github.com ||
-    die "No internet connection (github.com is unreachable): ducal downloads its apps and themes"
-  log_ok "Internet connection"
-
   local free_kb
-  free_kb=$(df -Pk "$HOME" 2>/dev/null | awk 'NR == 2 { print $4 }')
+  # only a warning: a failing df must not stop the install
+  free_kb=$(df -Pk "$HOME" 2>/dev/null | awk 'NR == 2 { print $4 }') || free_kb=""
   if [[ -n $free_kb ]] && ((free_kb < DUCAL_MIN_FREE_GB * 1024 * 1024)); then
     log_warn "Less than ${DUCAL_MIN_FREE_GB} GB free in $HOME: the install may run out of space"
   fi
