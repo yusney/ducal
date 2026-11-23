@@ -159,9 +159,37 @@ test_config_module_keeps_an_existing_claude_status_line() {
   mkdir -p "$HOME/.claude" "$HOME/.config/ccstatusline"
   echo '{"statusLine": {"type": "command", "command": "mine"}}' > "$HOME/.claude/settings.json"
   echo '{"mine": true}' > "$HOME/.config/ccstatusline/settings.json"
-  "$ROOT/install.sh" --only config >/dev/null 2>&1
+  # without a terminal (or with DUCAL_CLAUDE_STATUSLINE=keep) yours stays
+  "$ROOT/install.sh" --only config >/dev/null 2>&1 </dev/null
   assert_eq "$(jq -r '.statusLine.command' "$HOME/.claude/settings.json")" "mine"
   assert_eq "$(cat "$HOME/.config/ccstatusline/settings.json")" '{"mine": true}'
+}
+
+test_config_module_replaces_the_status_line_when_asked() {
+  printf '#!/usr/bin/env bash\n' > "$SANDBOX/stubs/ccstatusline"; chmod +x "$SANDBOX/stubs/ccstatusline"
+  mkdir -p "$HOME/.claude" "$HOME/.config/ccstatusline"
+  echo '{"model": "opus", "statusLine": {"type": "command", "command": "mine"}}' > "$HOME/.claude/settings.json"
+  echo '{"mine": true}' > "$HOME/.config/ccstatusline/settings.json"
+  DUCAL_CLAUDE_STATUSLINE=replace "$ROOT/install.sh" --only config >"$SANDBOX/out" 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_eq "$(jq -c '.statusLine' "$HOME/.claude/settings.json")" '{"type":"command","command":"ccstatusline","padding":0,"refreshInterval":10}'
+  assert_eq "$(jq -r '.model' "$HOME/.claude/settings.json")" "opus" "other settings kept"
+  assert_eq "$(jq -r '.powerline.theme' "$HOME/.config/ccstatusline/settings.json")" "tokyonight"
+  # the previous style is backed up, not lost
+  assert_eq "$(cat "$HOME"/.config/ccstatusline/settings.json.ducal-backup-*)" '{"mine": true}'
+  assert_contains "$SANDBOX/out" "Claude Code status line ready"
+}
+
+test_config_module_does_not_ask_when_the_status_line_is_already_ducal() {
+  printf '#!/usr/bin/env bash\n' > "$SANDBOX/stubs/ccstatusline"; chmod +x "$SANDBOX/stubs/ccstatusline"
+  "$ROOT/install.sh" --only config >/dev/null 2>&1
+  # ccstatusline adds its own install info: still the ducal style
+  jq '. + {installation: {installedVersion: "2.2.34", method: "pinned"}}' "$HOME/.config/ccstatusline/settings.json" > "$SANDBOX/s" &&
+    cp "$SANDBOX/s" "$HOME/.config/ccstatusline/settings.json"
+  DUCAL_CLAUDE_STATUSLINE=replace "$ROOT/install.sh" --only config >"$SANDBOX/out" 2>&1
+  assert_not_contains "$SANDBOX/out" "Replace it with the ducal one"
+  [[ -z $(ls "$HOME"/.config/ccstatusline/*ducal-backup* 2>/dev/null) ]] || fail "no backup expected"
+  assert_eq "$(jq -r '.installation.method' "$HOME/.config/ccstatusline/settings.json")" "pinned"
 }
 
 test_config_module_skips_the_status_line_without_ccstatusline() {

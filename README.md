@@ -110,7 +110,10 @@ It also installs [ccstatusline](https://github.com/sirmalloc/ccstatusline), and 
 `config` module gives Claude Code a Tokyo Night status line: model, context used,
 folder, git branch and changes, session time and cost, 5-hour usage and time to reset.
 The layout lives in `~/.config/ccstatusline/settings.json` (run `ccstatusline` to
-edit it). A status line you already set in `~/.claude/settings.json` is kept.
+edit it). When you already have another status line or ccstatusline style, the
+installer asks whether to replace it (Enter means yes). Replacing it keeps your
+previous style as `settings.json.ducal-backup-<date>`. Answer in advance with
+`DUCAL_CLAUDE_STATUSLINE=replace` or `keep`. Without a terminal, yours is kept.
 
 The `terminal` group always installs the `node` extra, because Claude Code's
 status line and MCP servers need it. It then sets up Claude Code:
