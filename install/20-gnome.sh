@@ -22,7 +22,11 @@ done
 DUCAL_EXTENSIONS=("${installed[@]}")
 # Without dash-to-dock, keep Ubuntu's dock: it reads the same dock settings
 if [[ " ${DUCAL_EXTENSIONS[*]} " != *" dash-to-dock@micxgx.gmail.com "* ]]; then
-  DUCAL_CONFLICTING_EXTENSIONS=("${DUCAL_CONFLICTING_EXTENSIONS[@]/ubuntu-dock@ubuntu.com/}")
+  kept=()
+  for uuid in "${DUCAL_CONFLICTING_EXTENSIONS[@]}"; do
+    [[ $uuid == ubuntu-dock@ubuntu.com ]] || kept+=("$uuid")
+  done
+  DUCAL_CONFLICTING_EXTENSIONS=("${kept[@]}")
 fi
 log_ok "Extensions installed"
 
