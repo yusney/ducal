@@ -66,7 +66,7 @@ which items you want from the groups that have them:
 
 | Group | What it installs |
 | --- | --- |
-| `terminal` | fish, Neovim, Starship, git, gh, lazygit, yazi, btop, ripgrep, fd, Claude Code CLI, opencode, their configuration and colors |
+| `terminal` | fish, Neovim, Starship, git, gh, lazygit, yazi, btop, ripgrep, fd, Claude Code CLI with its status line, plugins and MCP servers, gentle-ai, engram, opencode, their configuration and colors |
 | `languages` | Your pick of Node.js (fnm), Go, Rust and Docker |
 | `desktop-apps` | kitty and JetBrainsMono Nerd Font, plus your pick of Chrome, VS Code, Steam and Discord |
 | `gnome` | Extensions, tiling, top bar, launcher, GTK and shell themes, icons, cursors, wallpapers, shortcuts |
@@ -111,6 +111,21 @@ It also installs [ccstatusline](https://github.com/sirmalloc/ccstatusline), and 
 folder, git branch and changes, session time and cost, 5-hour usage and time to reset.
 The layout lives in `~/.config/ccstatusline/settings.json` (run `ccstatusline` to
 edit it). A status line you already set in `~/.claude/settings.json` is kept.
+
+The `terminal` group always installs the `node` extra, because Claude Code's
+status line and MCP servers need it. It then sets up Claude Code:
+
+- [engram](https://github.com/Gentleman-Programming/engram) and
+  [gentle-ai](https://github.com/Gentleman-Programming/gentle-ai) in `~/.local/bin`
+  (latest release), and [codegraph](https://www.npmjs.com/package/@colbymchenry/codegraph)
+  with npm. Run `gentle-ai` once afterwards to configure your agents.
+- The plugins `engram@engram` and `warp@claude-code-warp` (user scope).
+- The MCP servers `codegraph`, `context7` and `engram` (user scope). The
+  [Stitch](https://stitch.withgoogle.com) server needs your own Google API key, so it
+  is added only when you pass it: `STITCH_API_KEY=... ./install.sh`.
+
+Anything already installed or configured is left as it is. A step that fails only
+shows a warning, and the rest of the install goes on.
 
 Installing Docker adds your user to the `docker` group, which grants root-equivalent
 access through the Docker daemon.

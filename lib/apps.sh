@@ -112,6 +112,78 @@ install_claude() {
   curl -fsSL https://claude.ai/install.sh | bash
 }
 
+# install_gentleman_release NAME: latest Gentleman-Programming/NAME release binary
+# into ~/.local/bin. Resolved via the public release redirect, without the GitHub API.
+install_gentleman_release() {
+  local name=$1 releases release_url tag tmp
+  has_cmd "$name" && return 0
+  require_x86_64
+  releases="https://github.com/Gentleman-Programming/$name/releases"
+  log_step "Installing $name"
+  release_url=$(curl -fsSIL --retry 3 -o /dev/null -w '%{url_effective}' "$releases/latest") ||
+    { log_warn "Could not resolve the latest $name release: $releases/latest"; return 0; }
+  tag=${release_url##*/}
+  if [[ $release_url != "$releases/tag/$tag" || ! $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    log_warn "Unexpected $name release URL: $release_url"
+    return 0
+  fi
+  tmp=$(mktemp -d)
+  if curl -fsSL --retry 3 -o "$tmp/$name.tar.gz" "$releases/download/$tag/${name}_${tag#v}_linux_amd64.tar.gz"; then
+    mkdir -p "$HOME/.local/bin" && tar -xzf "$tmp/$name.tar.gz" -C "$HOME/.local/bin" "$name"
+  else
+    log_warn "Could not download $name $tag"
+  fi
+  rm -rf "$tmp"
+}
+
+# Claude Code plugins ducal installs: "plugin@marketplace github-repo"
+DUCAL_CLAUDE_PLUGINS=(
+  "engram@engram Gentleman-Programming/engram"
+  "warp@claude-code-warp warpdotdev/claude-code-warp"
+)
+
+# add_claude_mcp NAME ARGS...: user-scoped MCP server, skipped when it already exists
+add_claude_mcp() {
+  local name=$1; shift
+  claude mcp get "$name" >/dev/null 2>&1 && return 0
+  claude mcp add -s user "$name" "$@" >/dev/null || log_warn "Could not add the $name MCP server to Claude Code"
+}
+
+# Claude Code extras: Node (status line, codegraph, context7), engram, gentle-ai,
+# plugins and MCP servers. Each step is skipped when already in place; a failure
+# only warns, so the rest of the install goes on.
+setup_claude_code() {
+  if ! has_cmd claude; then
+    log_warn "Claude Code CLI not found; skipping its plugins and MCP servers"
+    return 0
+  fi
+  install_extra_node
+  local node_bin="$HOME/.local/share/fnm/aliases/default/bin" entry plugin repo engram_bin
+  PATH="$node_bin:$PATH"
+  install_gentleman_release engram
+  install_gentleman_release gentle-ai
+  if ! has_cmd codegraph; then
+    log_step "Installing codegraph"
+    npm install -g @colbymchenry/codegraph@1.6.3 || log_warn "Could not install codegraph"
+  fi
+  for entry in "${DUCAL_CLAUDE_PLUGINS[@]}"; do
+    read -r plugin repo <<<"$entry"
+    claude plugin list 2>/dev/null | grep -qF "$plugin" && continue
+    log_step "Installing the Claude Code plugin $plugin"
+    { claude plugin marketplace add "$repo" && claude plugin install -s user "$plugin"; } >/dev/null ||
+      log_warn "Could not install the Claude Code plugin $plugin"
+  done
+  engram_bin=$(command -v engram || echo "$HOME/.local/bin/engram")
+  add_claude_mcp codegraph -- codegraph serve --mcp
+  add_claude_mcp context7 -- npx -y --package=@upstash/context7-mcp@2.2.5 -- context7-mcp
+  add_claude_mcp engram -- "$engram_bin" mcp --tools=agent
+  # Stitch needs a personal Google API key: only added when STITCH_API_KEY is set
+  if [[ -n ${STITCH_API_KEY:-} ]]; then
+    add_claude_mcp stitch --transport http https://stitch.googleapis.com/mcp --header "X-Goog-Api-Key: $STITCH_API_KEY"
+  fi
+  log_ok "Claude Code plugins and MCP servers ready"
+}
+
 install_nerd_font() {
   [[ -d $DUCAL_FONT_DIR ]] && return 0
   local tmp; tmp=$(mktemp -d)
@@ -143,6 +215,7 @@ install_terminal_tools() {
   install_yazi
   install_claude
   install_opencode
+  setup_claude_code
 }
 
 # Group desktop-apps: the graphical terminal and its font

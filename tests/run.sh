@@ -496,7 +496,8 @@ test_parse_extras_rejects_unknown_names() {
 stub_lazygit_install() {
   stub_package_tools
   printf '%s\n' git curl unzip build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
-  for c in nvim starship yazi ya fd claude opencode; do fake_cmd "$c"; done
+  for c in nvim starship yazi ya fd claude opencode engram gentle-ai codegraph; do fake_cmd "$c"; done
+  stub_installed_node
   printf '#!/usr/bin/env bash\necho "lazygit fixture"\n' > "$SANDBOX/lazygit"
   chmod +x "$SANDBOX/lazygit"
   tar -czf "$SANDBOX/lazygit.tar.gz" -C "$SANDBOX" lazygit
@@ -582,7 +583,8 @@ test_yazi_installs_the_static_build_not_the_deb() {
 test_apps_module_skips_tools_already_installed() {
   stub_package_tools
   printf '%s\n' git curl unzip fontconfig build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
-  for c in kitty nvim starship lazygit yazi ya fd claude opencode; do fake_cmd "$c"; done
+  for c in kitty nvim starship lazygit yazi ya fd claude opencode engram gentle-ai codegraph; do fake_cmd "$c"; done
+  stub_installed_node
   mkdir -p "$HOME/.local/share/fonts/JetBrainsMonoNerd"
   DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
@@ -596,7 +598,8 @@ test_installer_finds_tools_in_local_bin() {
   stub_package_tools
   printf '%s\n' git curl unzip build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
   mkdir -p "$HOME/.local/bin"
-  for c in nvim starship lazygit yazi ya fd claude opencode; do
+  stub_installed_node
+  for c in nvim starship lazygit yazi ya fd claude opencode engram gentle-ai codegraph; do
     printf '#!/usr/bin/env bash\necho "%s $*" >> "$STUB_LOG"\n' "$c" > "$HOME/.local/bin/$c"
     chmod +x "$HOME/.local/bin/$c"
   done
@@ -610,7 +613,8 @@ test_installer_finds_tools_in_local_bin() {
 test_apps_module_installs_only_the_chosen_groups() {
   stub_package_tools
   printf '%s\n' git curl unzip build-essential fish btop ripgrep fd-find gh > "$SANDBOX/installed"
-  for c in nvim starship lazygit yazi ya fd claude opencode; do fake_cmd "$c"; done
+  for c in nvim starship lazygit yazi ya fd claude opencode engram gentle-ai codegraph; do fake_cmd "$c"; done
+  stub_installed_node
   # terminal only: no kitty, no Nerd Font (and their packages)
   DUCAL_GROUPS_SELECTED="terminal" DUCAL_EXTRAS=none "$ROOT/install.sh" --only apps >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
@@ -775,6 +779,99 @@ test_node_extra_installs_the_claude_status_line_tool() {
   : > "$STUB_LOG"; printf '#!/usr/bin/env bash\n' > "$bin/ccstatusline"; chmod +x "$bin/ccstatusline"
   bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; install_extra_node" >/dev/null 2>&1
   assert_not_contains "$STUB_LOG" "npm install"
+}
+
+# An fnm Node with ccstatusline already installed, so install_extra_node does nothing.
+stub_installed_node() {
+  local bin="$HOME/.local/share/fnm/aliases/default/bin"
+  write_fnm_stub "$HOME/.local/share/fnm/fnm"
+  mkdir -p "$bin"
+  printf '#!/usr/bin/env bash\necho "npm $*" >> "%s"\n' "$STUB_LOG" > "$bin/npm"
+  printf '#!/usr/bin/env bash\n' > "$bin/ccstatusline"
+  chmod +x "$bin/npm" "$bin/ccstatusline"
+}
+
+# claude stub: logs calls; `mcp get NAME` succeeds and `plugin list` shows the
+# plugin only when NAME is listed in $SANDBOX/claude-has.
+stub_claude_cli() {
+  : > "$SANDBOX/claude-has"
+  cat > "$SANDBOX/stubs/claude" <<EOF
+#!/usr/bin/env bash
+echo "claude \$*" >> "\$STUB_LOG"
+case "\$1 \$2" in
+  "mcp get") grep -qx "\$3" "$SANDBOX/claude-has" ;;
+  "plugin list") cat "$SANDBOX/claude-has" ;;
+esac
+EOF
+  chmod +x "$SANDBOX/stubs/claude"
+}
+
+# curl stub serving the latest release of the Gentleman-Programming tools
+stub_gentleman_releases() {
+  local name
+  for name in engram gentle-ai; do
+    mkdir -p "$SANDBOX/rel-$name"
+    printf '#!/usr/bin/env bash\necho "%s fixture"\n' "$name" > "$SANDBOX/rel-$name/$name"
+    chmod +x "$SANDBOX/rel-$name/$name"
+    tar -czf "$SANDBOX/$name.tar.gz" -C "$SANDBOX/rel-$name" "$name"
+  done
+  cat > "$SANDBOX/stubs/curl" <<EOF
+#!/usr/bin/env bash
+echo "curl \$*" >> "\$STUB_LOG"
+r=https://github.com/Gentleman-Programming
+case "\${@: -1}" in
+  \$r/engram/releases/latest) printf '%s' \$r/engram/releases/tag/v3.7.2 ;;
+  \$r/gentle-ai/releases/latest) printf '%s' \$r/gentle-ai/releases/tag/v5.0.0 ;;
+  \$r/engram/releases/download/v3.7.2/engram_3.7.2_linux_amd64.tar.gz) cp "$SANDBOX/engram.tar.gz" "\${@: -2:1}" ;;
+  \$r/gentle-ai/releases/download/v5.0.0/gentle-ai_5.0.0_linux_amd64.tar.gz) cp "$SANDBOX/gentle-ai.tar.gz" "\${@: -2:1}" ;;
+  *) exit 22 ;;
+esac
+EOF
+  chmod +x "$SANDBOX/stubs/curl"
+}
+
+test_claude_setup_installs_tools_plugins_and_mcp_servers() {
+  stub_package_tools
+  stub_installed_node
+  stub_claude_cli
+  stub_gentleman_releases
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; setup_claude_code" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_eq "$("$HOME/.local/bin/engram")" "engram fixture"
+  assert_eq "$("$HOME/.local/bin/gentle-ai")" "gentle-ai fixture"
+  assert_contains "$STUB_LOG" "npm install -g @colbymchenry/codegraph@1.6.3"
+  assert_contains "$STUB_LOG" "claude plugin marketplace add Gentleman-Programming/engram"
+  assert_contains "$STUB_LOG" "claude plugin install -s user engram@engram"
+  assert_contains "$STUB_LOG" "claude plugin marketplace add warpdotdev/claude-code-warp"
+  assert_contains "$STUB_LOG" "claude plugin install -s user warp@claude-code-warp"
+  assert_contains "$STUB_LOG" "claude mcp add -s user codegraph -- codegraph serve --mcp"
+  assert_contains "$STUB_LOG" "claude mcp add -s user context7 -- npx -y --package=@upstash/context7-mcp@2.2.5 -- context7-mcp"
+  assert_contains "$STUB_LOG" "claude mcp add -s user engram -- $HOME/.local/bin/engram mcp --tools=agent"
+  # stitch needs a personal API key: skipped without STITCH_API_KEY
+  assert_not_contains "$STUB_LOG" "stitch"
+}
+
+test_claude_setup_adds_stitch_with_an_api_key_and_skips_what_exists() {
+  stub_package_tools
+  stub_installed_node
+  stub_claude_cli
+  for c in engram gentle-ai codegraph; do fake_cmd "$c"; done
+  printf '%s\n' engram@engram warp@claude-code-warp codegraph context7 engram > "$SANDBOX/claude-has"
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" STITCH_API_KEY=k123 bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; setup_claude_code" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "curl"
+  assert_not_contains "$STUB_LOG" "npm install"
+  assert_not_contains "$STUB_LOG" "plugin install"
+  assert_not_contains "$STUB_LOG" "mcp add -s user codegraph"
+  assert_contains "$STUB_LOG" "claude mcp add -s user stitch --transport http https://stitch.googleapis.com/mcp --header X-Goog-Api-Key: k123"
+}
+
+test_claude_setup_warns_and_continues_when_claude_is_missing() {
+  stub_package_tools
+  local err
+  err=$(PATH="$SANDBOX/stubs:/usr/bin:/bin" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; setup_claude_code" 2>&1 >/dev/null); local rc=$?
+  assert_eq "$rc" "0"
+  [[ $err == *"Claude Code CLI not found"* ]] || fail "message: $err"
 }
 
 test_node_extra_installs_fnm_and_lts_when_missing() {
