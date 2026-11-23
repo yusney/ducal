@@ -57,8 +57,9 @@ PY
   if [[ $statusline_state == different ]]; then
     replace=${DUCAL_CLAUDE_STATUSLINE:-}
     if [[ -z $replace ]]; then
-      if [[ -t 0 ]]; then
-        read -r -p "You already have a Claude Code status line. Replace it with the ducal one? [Y/n] " replace ||
+      # Ask on the terminal even when stdin is not it (a pipe, another program)
+      if [[ -t 0 ]] || (exec </dev/tty) 2>/dev/null; then
+        read -r -p "You already have a Claude Code status line. Replace it with the ducal one? [Y/n] " replace </dev/tty ||
           replace=no # Ctrl-D counts as "no"
         replace=${replace:-yes}
       else
