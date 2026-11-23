@@ -177,10 +177,10 @@ setup_claude_code() {
   add_claude_mcp codegraph -- codegraph serve --mcp
   add_claude_mcp context7 -- npx -y --package=@upstash/context7-mcp@2.2.5 -- context7-mcp
   add_claude_mcp engram -- "$engram_bin" mcp --tools=agent
-  # Stitch needs a personal Google API key: only added when STITCH_API_KEY is set
-  if [[ -n ${STITCH_API_KEY:-} ]]; then
-    add_claude_mcp stitch --transport http https://stitch.googleapis.com/mcp --header "X-Goog-Api-Key: $STITCH_API_KEY"
-  fi
+  # Stitch needs a personal Google API key: STITCH_API_KEY, or a placeholder to
+  # replace later in ~/.claude.json. An existing stitch server is kept as it is.
+  add_claude_mcp stitch --transport http https://stitch.googleapis.com/mcp \
+    --header "X-Goog-Api-Key: ${STITCH_API_KEY:-YOUR_STITCH_API_KEY}"
   log_ok "Claude Code plugins and MCP servers ready"
 }
 

@@ -120,9 +120,11 @@ status line and MCP servers need it. It then sets up Claude Code:
   (latest release), and [codegraph](https://www.npmjs.com/package/@colbymchenry/codegraph)
   with npm. Run `gentle-ai` once afterwards to configure your agents.
 - The plugins `engram@engram` and `warp@claude-code-warp` (user scope).
-- The MCP servers `codegraph`, `context7` and `engram` (user scope). The
-  [Stitch](https://stitch.withgoogle.com) server needs your own Google API key, so it
-  is added only when you pass it: `STITCH_API_KEY=... ./install.sh`.
+- The MCP servers `codegraph`, `context7`, `engram` and
+  [Stitch](https://stitch.withgoogle.com) (user scope). Stitch needs your own Google
+  API key: pass it with `STITCH_API_KEY=... ./install.sh`, or replace the
+  placeholder `YOUR_STITCH_API_KEY` in `~/.claude.json` later. A Stitch server you
+  already configured is kept.
 
 Anything already installed or configured is left as it is. A step that fails only
 shows a warning, and the rest of the install goes on.

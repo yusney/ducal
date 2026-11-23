@@ -847,8 +847,8 @@ test_claude_setup_installs_tools_plugins_and_mcp_servers() {
   assert_contains "$STUB_LOG" "claude mcp add -s user codegraph -- codegraph serve --mcp"
   assert_contains "$STUB_LOG" "claude mcp add -s user context7 -- npx -y --package=@upstash/context7-mcp@2.2.5 -- context7-mcp"
   assert_contains "$STUB_LOG" "claude mcp add -s user engram -- $HOME/.local/bin/engram mcp --tools=agent"
-  # stitch needs a personal API key: skipped without STITCH_API_KEY
-  assert_not_contains "$STUB_LOG" "stitch"
+  # without STITCH_API_KEY, stitch gets a placeholder key to replace later
+  assert_contains "$STUB_LOG" "claude mcp add -s user stitch --transport http https://stitch.googleapis.com/mcp --header X-Goog-Api-Key: YOUR_STITCH_API_KEY"
 }
 
 test_claude_setup_adds_stitch_with_an_api_key_and_skips_what_exists() {
@@ -864,6 +864,17 @@ test_claude_setup_adds_stitch_with_an_api_key_and_skips_what_exists() {
   assert_not_contains "$STUB_LOG" "plugin install"
   assert_not_contains "$STUB_LOG" "mcp add -s user codegraph"
   assert_contains "$STUB_LOG" "claude mcp add -s user stitch --transport http https://stitch.googleapis.com/mcp --header X-Goog-Api-Key: k123"
+}
+
+test_claude_setup_keeps_an_existing_stitch_server() {
+  stub_package_tools
+  stub_installed_node
+  stub_claude_cli
+  for c in engram gentle-ai codegraph; do fake_cmd "$c"; done
+  echo stitch > "$SANDBOX/claude-has"
+  PATH="$SANDBOX/stubs:/usr/bin:/bin" STITCH_API_KEY=k123 bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; setup_claude_code" >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "mcp add -s user stitch"
 }
 
 test_claude_setup_warns_and_continues_when_claude_is_missing() {
