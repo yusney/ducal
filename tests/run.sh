@@ -1021,6 +1021,8 @@ test_gnome_module_keeps_ubuntu_dock_without_dash_to_dock() {
   assert_eq "$rc" "0"
   [[ $(cat "$SANDBOX/disabled") != *ubuntu-dock* ]] || fail "disabled: $(cat "$SANDBOX/disabled")"
   assert_not_contains "$STUB_LOG" "gnome-extensions disable ubuntu-dock@ubuntu.com"
+  # no empty entry left behind: never `gnome-extensions disable` without a uuid
+  ! grep -qxE 'gnome-extensions disable ?' "$STUB_LOG" || fail "disable ran without a uuid"
   assert_contains "$SANDBOX/dconf-loaded" "dock-position='BOTTOM'"
 }
 
