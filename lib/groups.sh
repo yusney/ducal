@@ -11,7 +11,7 @@ DUCAL_GROUPS_ALL=(terminal languages desktop-apps gnome system cleanup)
 DUCAL_GROUPS_HEADLESS=(terminal languages)
 
 declare -A DUCAL_GROUP_LABEL=(
-  [terminal]="Terminal and programming: fish, Neovim, git, gh, Claude Code, opencode..."
+  [terminal]="Terminal and programming: fish, Neovim, git, gh, Claude Code (status line, plugins, MCP), gentle-ai, opencode..."
   [languages]="Languages: Node.js, Go, Rust, Docker (you pick which)"
   [desktop-apps]="Desktop apps: kitty, Nerd Font, Chrome, VS Code... (you pick which)"
   [gnome]="GNOME desktop: extensions, tiling, themes, icons, wallpapers, shortcuts"
