@@ -29,24 +29,68 @@ mkdir -p "$DUCAL_CONFIG_DIR"
 log_ok "Installed the ducal command in ~/.local/bin"
 
 # Claude Code status line (Tokyo Night powerline). Only when ccstatusline is
-# installed (node extra); an existing status line in Claude's settings is kept.
+# installed (node extra). A different status line or ccstatusline style is
+# replaced only if you say so (DUCAL_CLAUDE_STATUSLINE=replace|keep answers in
+# advance; without a terminal it is kept). The replaced style is backed up.
 if group_on terminal && { has_cmd ccstatusline || [[ -x $HOME/.local/share/fnm/aliases/default/bin/ccstatusline ]]; }; then
-  seed_file "$cfg/ccstatusline/settings.json" "$HOME/.config/ccstatusline/settings.json"
-  mkdir -p "$HOME/.claude"
-  python3 - "$HOME/.claude/settings.json" <<'PY'
+  claude_settings="$HOME/.claude/settings.json"
+  ccs_settings="$HOME/.config/ccstatusline/settings.json"
+  # Prints "missing", "same" or "different" for the current status line setup
+  statusline_state=$(python3 - "$claude_settings" "$ccs_settings" "$cfg/ccstatusline/settings.json" <<'PY'
+import json, os, sys
+claude, ours_path, ducal_path = sys.argv[1:]
+def load(path):
+    with open(path) as f:
+        return json.load(f)
+line = load(claude).get("statusLine") if os.path.exists(claude) else None
+if line is None and not os.path.exists(ours_path):
+    print("missing")
+    sys.exit()
+# ccstatusline records its own install info: not part of the style
+style = lambda d: {k: v for k, v in d.items() if k != "installation"}
+same_line = line is None or line.get("command") == "ccstatusline"
+same_style = not os.path.exists(ours_path) or style(load(ours_path)) == style(load(ducal_path))
+print("same" if same_line and same_style else "different")
+PY
+  )
+  replace=yes
+  if [[ $statusline_state == different ]]; then
+    replace=${DUCAL_CLAUDE_STATUSLINE:-}
+    if [[ -z $replace ]]; then
+      if [[ -t 0 ]]; then
+        read -r -p "You already have a Claude Code status line. Replace it with the ducal one? [Y/n] " replace ||
+          replace=no # Ctrl-D counts as "no"
+        replace=${replace:-yes}
+      else
+        replace=keep
+      fi
+    fi
+    case ${replace,,} in y | yes | replace) replace=yes ;; *) replace=no ;; esac
+  fi
+  if [[ $replace == yes ]]; then
+    if [[ $statusline_state == different && -e $ccs_settings ]]; then
+      mv "$ccs_settings" "$ccs_settings.ducal-backup-$(date +%Y%m%d%H%M%S)"
+    fi
+    seed_file "$cfg/ccstatusline/settings.json" "$ccs_settings"
+    mkdir -p "$HOME/.claude"
+    python3 - "$claude_settings" <<'PY'
 import json, os, sys
 path = sys.argv[1]
 settings = {}
 if os.path.exists(path):
     with open(path) as f:
         settings = json.load(f)
-if "statusLine" not in settings:
-    settings["statusLine"] = {"type": "command", "command": "ccstatusline", "padding": 0, "refreshInterval": 10}
+line = {"type": "command", "command": "ccstatusline", "padding": 0, "refreshInterval": 10}
+if settings.get("statusLine") != line:
+    settings["statusLine"] = line
     with open(path, "w") as f:
         json.dump(settings, f, indent=2)
         f.write("\n")
 PY
-  log_ok "Claude Code status line ready"
+    log_ok "Claude Code status line ready"
+  else
+    log_ok "Kept your Claude Code status line"
+  fi
 fi
 
 # The assets module applies the default theme once the GTK themes are in place;
