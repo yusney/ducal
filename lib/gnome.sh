@@ -24,14 +24,20 @@ is_extension_installed() { gnome-extensions list 2>/dev/null | grep -qx "$1"; }
 
 # install_extension UUID — downloads the build for this GNOME Shell version
 # from extensions.gnome.org. New extensions load at the next login.
+# Fails with a warning when there is no build: a new GNOME often comes out
+# before every extension supports it, and the rest of the desktop still installs.
 install_extension() {
   local uuid=$1 version info path tmp
   is_extension_installed "$uuid" && return 0
   version=$(shell_major_version)
-  info=$(curl -fsSL "https://extensions.gnome.org/extension-info/?uuid=$uuid&shell_version=$version") ||
-    die "Extension $uuid is not available for GNOME Shell $version"
-  path=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["download_url"])' <<<"$info") ||
-    die "Unexpected answer from extensions.gnome.org for $uuid"
+  if ! info=$(curl -fsSL "https://extensions.gnome.org/extension-info/?uuid=$uuid&shell_version=$version"); then
+    log_warn "$uuid is not available for GNOME Shell $version, skipping it"
+    return 1
+  fi
+  if ! path=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["download_url"])' <<<"$info"); then
+    log_warn "Unexpected answer from extensions.gnome.org for $uuid, skipping it"
+    return 1
+  fi
   tmp=$(mktemp -d)
   log_step "Installing extension $uuid"
   curl -fsSL --retry 3 -o "$tmp/ext.zip" "https://extensions.gnome.org$path" || die "Download failed: $uuid"
