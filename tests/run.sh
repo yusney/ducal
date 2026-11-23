@@ -160,7 +160,8 @@ test_config_module_keeps_an_existing_claude_status_line() {
   echo '{"statusLine": {"type": "command", "command": "mine"}}' > "$HOME/.claude/settings.json"
   echo '{"mine": true}' > "$HOME/.config/ccstatusline/settings.json"
   # without a terminal (or with DUCAL_CLAUDE_STATUSLINE=keep) yours stays
-  "$ROOT/install.sh" --only config >/dev/null 2>&1 </dev/null
+  # setsid: no controlling terminal, as when nobody can answer
+  setsid -w "$ROOT/install.sh" --only config >/dev/null 2>&1 </dev/null
   assert_eq "$(jq -r '.statusLine.command' "$HOME/.claude/settings.json")" "mine"
   assert_eq "$(cat "$HOME/.config/ccstatusline/settings.json")" '{"mine": true}'
 }
