@@ -14,7 +14,16 @@ source "$DUCAL_ROOT/lib/gnome.sh"
 
 has_cmd gnome-shell || die "GNOME Shell not found: ducal needs a GNOME desktop"
 
-for uuid in "${DUCAL_EXTENSIONS[@]}"; do install_extension "$uuid"; done
+# Only the extensions that installed get enabled
+installed=()
+for uuid in "${DUCAL_EXTENSIONS[@]}"; do
+  if install_extension "$uuid"; then installed+=("$uuid"); fi
+done
+DUCAL_EXTENSIONS=("${installed[@]}")
+# Without dash-to-dock, keep Ubuntu's dock: it reads the same dock settings
+if [[ " ${DUCAL_EXTENSIONS[*]} " != *" dash-to-dock@micxgx.gmail.com "* ]]; then
+  DUCAL_CONFLICTING_EXTENSIONS=("${DUCAL_CONFLICTING_EXTENSIONS[@]/ubuntu-dock@ubuntu.com/}")
+fi
 log_ok "Extensions installed"
 
 update_extension_lists

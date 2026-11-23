@@ -205,7 +205,7 @@ test_preflight_passes_on_a_ready_system() {
 # apt rejects package lists "not valid yet" when the clock is behind
 test_preflight_stops_when_the_clock_is_off() {
   stub_preflight
-  printf 'HTTP/2 200\r\ndate: %s\r\n' "$(LC_ALL=C date -u -d '+3 hours' '+%a, %d %b %Y %H:%M:%S GMT')" > "$SANDBOX/headers"
+  printf 'HTTP/2 200\r\ndate: %s\r\n' "$(LC_ALL=C date -u -d '+3 hours 30 seconds' '+%a, %d %b %Y %H:%M:%S GMT')" > "$SANDBOX/headers"
   preflight preflight_system >"$SANDBOX/out" 2>&1; local rc=$?
   assert_eq "$rc" "1"
   assert_contains "$SANDBOX/out" "Your clock is off by 180 minutes"
@@ -959,6 +959,8 @@ EOF
   cat > "$s/curl" <<'EOF'
 #!/usr/bin/env bash
 echo "curl $*" >> "$STUB_LOG"
+# uuids listed in $SANDBOX/unavailable have no build for this GNOME Shell
+for a in "$@"; do [[ $a == *extension-info* ]] && grep -qF "$(sed 's/.*uuid=//; s/&.*//' <<<"$a")" "$(dirname "$STUB_LOG")/unavailable" 2>/dev/null && exit 22; done
 for a in "$@"; do [[ $a == *extension-info* ]] && { echo '{"download_url": "/download-extension/x.shell-extension.zip?version_tag=1"}'; exit 0; }; done
 out=""; while [[ $# -gt 0 ]]; do [[ $1 == -o ]] && out=$2; shift; done
 [[ -n $out ]] && echo zip > "$out"
@@ -997,6 +999,29 @@ test_gnome_module_enables_ours_and_keeps_user_extensions() {
   assert_eq "$(grep -o 'forge@jmmaranan.com' <<<"$enabled" | wc -l)" "1" "no duplicates after two runs"
   [[ $disabled == *"'ubuntu-dock@ubuntu.com'"* && $disabled == *"'ding@rastersoft.com'"* ]] || fail "disabled: $disabled"
   [[ $disabled != *forge@jmmaranan.com* ]] || fail "forge must leave the disabled list: $disabled"
+}
+
+# A new GNOME often comes before every extension supports it: skip, do not stop
+test_gnome_module_skips_an_extension_without_a_build() {
+  stub_gnome_tools
+  echo "search-light@icedman.github.com" > "$SANDBOX/unavailable"
+  "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$SANDBOX/out" "search-light@icedman.github.com is not available for GNOME Shell 46, skipping it"
+  assert_contains "$SANDBOX/out" "Desktop settings applied"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "6" "the other 6 extensions"
+  [[ $(cat "$SANDBOX/enabled") != *search-light* ]] || fail "enabled: $(cat "$SANDBOX/enabled")"
+}
+
+# Without dash-to-dock, Ubuntu's own dock stays on (it reads the same dock settings)
+test_gnome_module_keeps_ubuntu_dock_without_dash_to_dock() {
+  stub_gnome_tools
+  echo "dash-to-dock@micxgx.gmail.com" > "$SANDBOX/unavailable"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  [[ $(cat "$SANDBOX/disabled") != *ubuntu-dock* ]] || fail "disabled: $(cat "$SANDBOX/disabled")"
+  assert_not_contains "$STUB_LOG" "gnome-extensions disable ubuntu-dock@ubuntu.com"
+  assert_contains "$SANDBOX/dconf-loaded" "dock-position='BOTTOM'"
 }
 
 test_gnome_module_loads_desktop_settings() {
