@@ -16,6 +16,7 @@
 | `Super+M` | Notifications and calendar |
 | `Super+D` | Show the desktop |
 | `Shift+Super+Space` | Switch keyboard layout |
+| `Print` or `Shift+Super+S` | Screenshot or screen recording (the screenshot key of keyboards like the Logitech K950 sends `Shift+Super+S`) |
 
 ## Workspaces
 
@@ -53,7 +54,7 @@ as in Vim.
 | `Super+G` | Toggle the split between side by side and stacked vertically |
 | `Super+Z` | Open the next window to the side |
 | `Super+V` | Open the next window below |
-| `Shift+Super+S` | Stacked layout |
+| `Ctrl+Super+S` | Stacked layout |
 | `Shift+Super+T` | Tabbed layout |
 | `Ctrl+Alt+Y` | Show or hide the tab bar |
 

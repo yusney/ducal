@@ -1175,6 +1175,15 @@ test_gnome_module_sets_up_clipboard_history() {
   assert_contains "$SANDBOX/dconf-loaded" "toggle-menu=['<Shift><Super>v']"
 }
 
+# Keyboards with a screenshot key (Logitech K950) send Super+Shift+S, which Forge
+# took for its stacked layout: the screenshot UI never opened
+test_gnome_module_keeps_super_shift_s_for_screenshots() {
+  stub_gnome_tools
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  assert_contains "$SANDBOX/dconf-loaded" "show-screenshot-ui=['Print', '<Shift><Super>s']"
+  assert_contains "$SANDBOX/dconf-loaded" "con-stacked-layout-toggle=['<Control><Super>s']"
+}
+
 test_gnome_module_loads_desktop_settings() {
   stub_gnome_tools
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1
