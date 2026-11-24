@@ -29,6 +29,13 @@ if [[ ${answer,,} != y && ${answer,,} != yes ]]; then
   return 0
 fi
 
+# Build tools a fresh Ubuntu does not ship (26.04 has none of them):
+# gresource and glib-compile-resources for the login theme, GdkPixbuf with its
+# SVG loader for the logo, and the spinner images of the boot splash.
+# shellcheck source=../lib/apps.sh
+source "$DUCAL_ROOT/lib/apps.sh"
+apt_install libglib2.0-bin libglib2.0-dev-bin python3-gi gir1.2-gdkpixbuf-2.0 librsvg2-common plymouth-theme-spinner
+
 theme=$(cat "$DUCAL_CONFIG_DIR/current" 2>/dev/null || echo tokyo-night)
 # shellcheck source=/dev/null
 source "$DUCAL_ROOT/themes/$theme/palette.env"

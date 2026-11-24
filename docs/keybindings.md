@@ -6,7 +6,7 @@
 
 | Shortcut | Action |
 | --- | --- |
-| `Super+Space` | Open the launcher (apps, files, settings) |
+| `Super+Space` | Open the launcher (apps, files, settings); `Ctrl+Space` also works |
 | `Super+B` | Search the web, or open an address, in the default browser |
 | `Ctrl+Alt+T` | Open a terminal (kitty) |
 | `Super+Q` | Close the focused window (`Alt+F4` also works) |

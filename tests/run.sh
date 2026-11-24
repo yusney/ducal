@@ -1283,6 +1283,16 @@ test_system_install_with_logo_themes_login_and_boot() {
   [[ -s $p/watermark.png && -f $p/throbber-0001.png ]] || fail "plymouth images missing"
   assert_contains "$STUB_LOG" "update-alternatives --set default.plymouth $p/ducal.plymouth"
   assert_contains "$STUB_LOG" "update-initramfs -u"
+  # Build tools a fresh Ubuntu (26.04) does not ship, installed first
+  assert_contains "$STUB_LOG" "apt-get install -y libglib2.0-bin libglib2.0-dev-bin python3-gi gir1.2-gdkpixbuf-2.0 librsvg2-common plymouth-theme-spinner"
+}
+
+test_system_install_skips_build_tools_already_installed() {
+  setup_sysroot
+  printf '%s\n' libglib2.0-bin libglib2.0-dev-bin python3-gi gir1.2-gdkpixbuf-2.0 librsvg2-common plymouth-theme-spinner > "$SANDBOX/installed"
+  DUCAL_SYSTEM=yes "$ROOT/install.sh" --only system >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_not_contains "$STUB_LOG" "apt-get install"
 }
 
 test_system_install_without_logo_uses_the_ducal_mark() {
