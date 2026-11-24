@@ -546,6 +546,26 @@ test_apt_install_refreshes_stale_lists_before_skipping() {
   assert_not_contains "$SANDBOX/err" "skipping"
 }
 
+# Docker publishes a new Ubuntu release months later: use the 24.04 repository meanwhile
+test_docker_repo_falls_back_to_noble_for_an_unpublished_release() {
+  mkdir -p "$SANDBOX/root/etc"
+  printf 'ID=ubuntu\nVERSION_CODENAME=zesty2\n' > "$SANDBOX/root/etc/os-release"
+  cat > "$SANDBOX/stubs/curl" <<'EOF'
+#!/usr/bin/env bash
+echo "curl $*" >> "$STUB_LOG"
+[[ ${@: -1} == */dists/questing/Release ]] # only questing is published
+EOF
+  chmod +x "$SANDBOX/stubs/curl"
+  local out
+  out=$(DUCAL_SYSROOT="$SANDBOX/root" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; docker_repo_codename" 2>"$SANDBOX/err")
+  assert_eq "$out" "noble"
+  assert_contains "$SANDBOX/err" "Docker has no packages for Ubuntu zesty2 yet, using the 24.04 (noble) ones"
+  printf 'ID=ubuntu\nVERSION_CODENAME=questing\n' > "$SANDBOX/root/etc/os-release"
+  out=$(DUCAL_SYSROOT="$SANDBOX/root" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; docker_repo_codename" 2>/dev/null)
+  assert_eq "$out" "questing"
+  assert_contains "$STUB_LOG" "https://download.docker.com/linux/ubuntu/dists/questing/Release"
+}
+
 test_apt_install_does_nothing_when_all_installed() {
   stub_package_tools
   printf 'git\nbtop\n' > "$SANDBOX/installed"
