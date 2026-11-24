@@ -45,4 +45,12 @@ log_ok "Super+B opens a web search box"
 
 # Ctrl+Alt+T opens kitty instead of GNOME Terminal
 gsettings set org.gnome.desktop.default-applications.terminal exec "$HOME/.local/bin/kitty"
+# Ubuntu 25.04+ asks xdg-terminal-exec, which reads this list (first line wins)
+terminals="$HOME/.config/ubuntu-xdg-terminals.list"
+mkdir -p "$(dirname "$terminals")"
+{
+  echo kitty.desktop
+  [[ -f $terminals ]] && grep -vx 'kitty.desktop' "$terminals"
+} >"$terminals.new" || true
+mv "$terminals.new" "$terminals"
 log_ok "Ctrl+Alt+T opens kitty"

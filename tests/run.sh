@@ -1123,6 +1123,18 @@ test_gnome_module_keeps_ubuntu_dock_without_dash_to_dock() {
   assert_contains "$SANDBOX/dconf-loaded" "dock-position='BOTTOM'"
 }
 
+# Ubuntu 25.04+ picks the Ctrl+Alt+T terminal from ubuntu-xdg-terminals.list
+test_gnome_module_makes_kitty_the_xdg_terminal_and_keeps_other_entries() {
+  stub_gnome_tools
+  mkdir -p "$HOME/.config"
+  printf 'org.gnome.Ptyxis.desktop:new-window\nkitty.desktop\n' > "$HOME/.config/ubuntu-xdg-terminals.list"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1; local rc=$?
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  assert_eq "$rc" "0"
+  assert_eq "$(cat "$HOME/.config/ubuntu-xdg-terminals.list")" "$(printf 'kitty.desktop\norg.gnome.Ptyxis.desktop:new-window')"
+  assert_contains "$STUB_LOG" "gsettings set org.gnome.desktop.default-applications.terminal exec $HOME/.local/bin/kitty"
+}
+
 test_gnome_module_loads_desktop_settings() {
   stub_gnome_tools
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1
