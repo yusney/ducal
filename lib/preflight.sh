@@ -28,6 +28,14 @@ check_clock() {
 }
 
 # preflight_system — run before the menu.
+# ubuntu_version_supported VERSION_ID — true for 24.04 and every later release
+ubuntu_version_supported() {
+  local major minor
+  [[ $1 =~ ^([0-9]+)\.([0-9]+)$ ]] || return 1
+  major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]}
+  ((10#$major * 100 + 10#$minor >= 2404))
+}
+
 preflight_system() {
   log_step "Checking your system"
 
@@ -48,8 +56,8 @@ preflight_system() {
   name=${name^}
   if [[ $id != ubuntu ]]; then
     log_warn "ducal targets Ubuntu, this is $name: continuing, but expect surprises"
-  elif [[ $version != 24.04 ]]; then
-    log_warn "Ubuntu $version is untested (ducal targets 24.04): continuing anyway"
+  elif ! ubuntu_version_supported "$version"; then
+    log_warn "Ubuntu $version is untested (ducal supports 24.04 or newer): continuing anyway"
   fi
   log_ok "System: ${name% } $arch"
 
@@ -69,6 +77,11 @@ preflight_system() {
   for p in "${DUCAL_PREREQUISITES[@]}"; do is_pkg_installed "$p" || missing+=("$p"); done
   if [[ ${#missing[@]} -gt 0 ]]; then
     as_root apt-get update -qq || die "apt-get update failed: check your connection and apt sources"
+    DUCAL_APT_UPDATED=1
+    # apt_install skips what apt does not have; the installer cannot go on without these
+    for p in "${missing[@]}"; do
+      has_apt_candidate "$p" || die "$p is not available from apt: check that the main and universe components are enabled"
+    done
     apt_install "${missing[@]}" || die "Could not install ${missing[*]}"
   fi
   log_ok "Prerequisites ready: ${DUCAL_PREREQUISITES[*]}"

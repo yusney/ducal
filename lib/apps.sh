@@ -9,10 +9,33 @@ DUCAL_FONT_DIR="$HOME/.local/share/fonts/JetBrainsMonoNerd"
 
 is_pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
 
-# apt_install PKG... — installs only the packages that are missing.
+# LC_ALL=C: apt-cache translates "Candidate". The whole output is read first:
+# `| grep -q` would stop early and, under pipefail, fail with SIGPIPE.
+has_apt_candidate() {
+  local policy
+  policy=$(LC_ALL=C apt-cache policy "$1" 2>/dev/null) || return 1
+  [[ $policy =~ Candidate:\ [^\(] ]]
+}
+
+# apt_install PKG... — installs only the packages that are missing. A package
+# this release does not have (newer Ubuntu releases drop some) is skipped with
+# a warning, after refreshing the package lists once in case they are old.
 apt_install() {
-  local missing=() p
+  local missing=() available=() p
   for p in "$@"; do is_pkg_installed "$p" || missing+=("$p"); done
+  [[ ${#missing[@]} -eq 0 ]] && return 0
+  for p in "${missing[@]}"; do
+    if ! has_apt_candidate "$p" && [[ -z ${DUCAL_APT_UPDATED:-} ]]; then
+      as_root apt-get update -qq || log_warn "apt-get update failed"
+      DUCAL_APT_UPDATED=1
+    fi
+    if has_apt_candidate "$p"; then
+      available+=("$p")
+    else
+      log_warn "$p is not available on this release, skipping it"
+    fi
+  done
+  missing=("${available[@]}")
   [[ ${#missing[@]} -eq 0 ]] && return 0
   log_step "apt: installing ${missing[*]}"
   as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
@@ -242,6 +265,19 @@ install_extra_code() {
   install_deb_url code "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64"
 }
 
+# docker_repo_codename — this release's codename, or noble (24.04) while Docker
+# has not published packages for it yet (new releases wait a few months).
+docker_repo_codename() {
+  local codename
+  codename=$(sed -n 's/^VERSION_CODENAME=//p' "${DUCAL_SYSROOT:-}/etc/os-release" | tr -d '"')
+  if [[ -n $codename ]] && curl -fsSL --retry 2 -o /dev/null "https://download.docker.com/linux/ubuntu/dists/$codename/Release"; then
+    echo "$codename"
+  else
+    log_warn "Docker has no packages for Ubuntu ${codename:-this release} yet, using the 24.04 (noble) ones"
+    echo noble
+  fi
+}
+
 install_extra_docker() {
   if ! has_cmd docker; then
     log_step "Installing Docker Engine"
@@ -249,8 +285,7 @@ install_extra_docker() {
     as_root install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | as_root tee /etc/apt/keyrings/docker.asc >/dev/null
     as_root chmod a+r /etc/apt/keyrings/docker.asc
-    # shellcheck source=/dev/null
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" |
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(docker_repo_codename) stable" |
       as_root tee /etc/apt/sources.list.d/docker.list >/dev/null
     as_root apt-get update
     apt_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin

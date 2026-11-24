@@ -23,7 +23,8 @@ use every day. Switch the whole desktop to another palette with a single command
 
 ## Requirements
 
-- Ubuntu 24.04 LTS with GNOME on x86_64 (other versions are untested). Only the
+- Ubuntu 24.04 LTS or newer with GNOME on x86_64 (tested on 24.04; the terminal tools
+  also on 25.10 and 26.04). Only the
   terminal tools? Ubuntu on WSL or a server works too (see [Choose what to install](#choose-what-to-install)).
 - A user with `sudo` access
 - An internet connection (packages and third-party assets are downloaded at install time)
@@ -35,8 +36,8 @@ sudo, no internet, a clock more than 5 minutes off (apt rejects package lists wi
 wrong date: fix it with `sudo timedatectl set-ntp true`), or the `gnome` / `system`
 groups chosen without a GNOME desktop.
 The GNOME check runs right after the menu, once those prerequisites are in place and
-before any group is installed. Another Ubuntu version or less than 5 GB free only shows
-a warning.
+before any group is installed. An Ubuntu older than 24.04, another distribution or less
+than 5 GB free only shows a warning.
 
 ## Install
 
@@ -164,9 +165,9 @@ installer asks for each group, or answer in advance with
 
 | Group | What it does |
 | --- | --- |
-| `apps` | Removes Rhythmbox, Totem, Shotwell, Camera, Transmission, Remmina, Clocks, Characters, Help, USB Creator, Document Scanner, Déjà Dup, Calendar, gedit and Text Editor |
+| `apps` | Removes Rhythmbox, Totem, Showtime, Shotwell, Camera, Transmission, Remmina, Clocks, Characters, Help, USB Creator, Document Scanner, Déjà Dup, Calendar, gedit and Text Editor |
 | `office` | Removes LibreOffice and Thunderbird (both the deb and the snap) |
-| `telemetry` | Removes ubuntu-report, apport, whoopsie and kerneloops |
+| `telemetry` | Removes ubuntu-report, ubuntu-insights, apport, whoopsie and kerneloops |
 | `services` | Disables (does not uninstall) file indexing, printing, 3G/4G modems and network discovery |
 
 Packages are removed with `apt-get remove`, so your documents and settings stay in your
@@ -238,6 +239,7 @@ config/           configuration files linked or copied into ~/.config
 themes/<name>/    palette and per-tool color files for each theme
 templates/        files generated from a palette (GNOME Shell overlay)
 tests/run.sh      test suite (sandboxed HOME, no changes to your system)
+tests/containers.sh  real install of the terminal group in Ubuntu containers
 ```
 
 ## Adding a theme
@@ -264,6 +266,12 @@ tests/run.sh
 
 Tests run against a temporary `HOME` with stubbed desktop commands, so they never
 touch your real configuration.
+
+To check a real install on several Ubuntu releases, run `tests/containers.sh`
+(Docker and internet needed, a few minutes per release). It installs the
+`terminal` group as a sudo user in fresh `ubuntu:24.04`, `ubuntu:25.10` and
+`ubuntu:26.04` containers and checks that every tool runs. Pass releases to pick
+them: `tests/containers.sh 26.04`.
 
 ## Credits
 

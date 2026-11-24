@@ -258,6 +258,16 @@ test_preflight_installs_missing_prerequisites() {
   assert_contains "$STUB_LOG" "apt-get install -y git whiptail"
 }
 
+test_preflight_stops_when_a_prerequisite_is_not_available() {
+  stub_preflight
+  printf '%s\n' curl python3 ca-certificates git > "$SANDBOX/installed"
+  echo whiptail > "$SANDBOX/no-candidate"
+  preflight preflight_system >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  assert_eq "$rc" "1"
+  assert_contains "$SANDBOX/err" "whiptail is not available from apt"
+  assert_not_contains "$STUB_LOG" "apt-get install"
+}
+
 test_preflight_stops_on_an_unsupported_system() {
   stub_preflight
   local err
@@ -291,6 +301,19 @@ test_preflight_warns_on_an_untested_version() {
   preflight preflight_system >/dev/null 2>"$SANDBOX/err"; local rc=$?
   assert_eq "$rc" "0"
   assert_contains "$SANDBOX/err" "22.04 is untested"
+  assert_contains "$SANDBOX/err" "ducal supports 24.04 or newer"
+}
+
+test_preflight_accepts_newer_ubuntu_releases() {
+  stub_preflight
+  local v
+  for v in 24.10 25.04 25.10 26.04 30.10; do
+    printf 'NAME="Ubuntu"\nVERSION_ID="%s"\nID=ubuntu\n' "$v" > "$DUCAL_SYSROOT/etc/os-release"
+    preflight preflight_system >"$SANDBOX/out" 2>"$SANDBOX/err"; local rc=$?
+    assert_eq "$rc" "0" "$v"
+    assert_not_contains "$SANDBOX/err" "untested"
+    assert_contains "$SANDBOX/out" "System: Ubuntu $v x86_64"
+  done
 }
 
 test_preflight_needs_gnome_for_the_desktop_groups() {
@@ -483,6 +506,23 @@ stub_package_tools() {
   printf '#!/usr/bin/env bash\necho "curl $*" >> "$STUB_LOG"\nexit 1\n' > "$s/curl"
   # dpkg-query reports only the packages listed in $SANDBOX/installed as installed
   printf '#!/usr/bin/env bash\npkg="${@: -1}"\ngrep -qx "$pkg" "%s/installed" && echo "install ok installed" || exit 1\n' "$SANDBOX" > "$s/dpkg-query"
+  # apt-cache: no candidate for packages in $SANDBOX/no-candidate, nor for those
+  # in $SANDBOX/stale-lists until `apt-get update` ran
+  cat > "$s/apt-cache" <<EOF
+#!/usr/bin/env bash
+pkg="\${@: -1}"
+if grep -qx "\$pkg" "$SANDBOX/no-candidate" 2>/dev/null ||
+  { grep -qx "\$pkg" "$SANDBOX/stale-lists" 2>/dev/null && ! grep -q "apt-get update" "\$STUB_LOG"; }; then
+  version="(none)"
+else
+  version=1.0
+fi
+# Like the real one: localized unless LC_ALL=C, and a long version table after
+# the candidate (a reader that stops early makes it fail with SIGPIPE)
+label=Candidate; [[ \${LC_ALL:-} == C ]] || label=Candidato
+printf '%s:\\n  Installed: (none)\\n  %s: %s\\n  Version table:\\n' "\$pkg" "\$label" "\$version"
+seq 1 50000
+EOF
   chmod +x "$s"/*
   : > "$SANDBOX/installed"
 }
@@ -496,6 +536,50 @@ test_apt_install_only_installs_missing_packages() {
   bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install git btop" >/dev/null 2>&1
   assert_contains "$STUB_LOG" "apt-get install -y btop"
   assert_not_contains "$STUB_LOG" "install -y git"
+}
+
+# A newer Ubuntu may drop a package: skip it with a warning, install the rest
+test_apt_install_skips_a_package_this_release_does_not_have() {
+  stub_package_tools
+  echo "gtk2-engines-murrine" > "$SANDBOX/no-candidate"
+  # pipefail, as in install.sh
+  bash -o pipefail -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install btop gtk2-engines-murrine" >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "apt-get install -y btop"
+  assert_not_contains "$STUB_LOG" "gtk2-engines-murrine"
+  assert_contains "$SANDBOX/err" "gtk2-engines-murrine is not available on this release, skipping it"
+  assert_eq "$(grep -c 'apt-get update' "$STUB_LOG")" "1" "lists refreshed once before giving up"
+}
+
+# Old package lists are not a missing package: refresh them, then install
+test_apt_install_refreshes_stale_lists_before_skipping() {
+  stub_package_tools
+  printf 'btop\nfish\n' > "$SANDBOX/stale-lists"
+  bash -o pipefail -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install btop fish" >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  assert_eq "$rc" "0"
+  assert_eq "$(grep -c 'apt-get update' "$STUB_LOG")" "1"
+  assert_contains "$STUB_LOG" "apt-get install -y btop fish"
+  assert_not_contains "$SANDBOX/err" "skipping"
+}
+
+# Docker publishes a new Ubuntu release months later: use the 24.04 repository meanwhile
+test_docker_repo_falls_back_to_noble_for_an_unpublished_release() {
+  mkdir -p "$SANDBOX/root/etc"
+  printf 'ID=ubuntu\nVERSION_CODENAME=zesty2\n' > "$SANDBOX/root/etc/os-release"
+  cat > "$SANDBOX/stubs/curl" <<'EOF'
+#!/usr/bin/env bash
+echo "curl $*" >> "$STUB_LOG"
+[[ ${@: -1} == */dists/questing/Release ]] # only questing is published
+EOF
+  chmod +x "$SANDBOX/stubs/curl"
+  local out
+  out=$(DUCAL_SYSROOT="$SANDBOX/root" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; docker_repo_codename" 2>"$SANDBOX/err")
+  assert_eq "$out" "noble"
+  assert_contains "$SANDBOX/err" "Docker has no packages for Ubuntu zesty2 yet, using the 24.04 (noble) ones"
+  printf 'ID=ubuntu\nVERSION_CODENAME=questing\n' > "$SANDBOX/root/etc/os-release"
+  out=$(DUCAL_SYSROOT="$SANDBOX/root" bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; docker_repo_codename" 2>/dev/null)
+  assert_eq "$out" "questing"
+  assert_contains "$STUB_LOG" "https://download.docker.com/linux/ubuntu/dists/questing/Release"
 }
 
 test_apt_install_does_nothing_when_all_installed() {
@@ -1055,6 +1139,18 @@ test_gnome_module_keeps_ubuntu_dock_without_dash_to_dock() {
   assert_contains "$SANDBOX/dconf-loaded" "dock-position='BOTTOM'"
 }
 
+# Ubuntu 25.04+ picks the Ctrl+Alt+T terminal from ubuntu-xdg-terminals.list
+test_gnome_module_makes_kitty_the_xdg_terminal_and_keeps_other_entries() {
+  stub_gnome_tools
+  mkdir -p "$HOME/.config"
+  printf 'org.gnome.Ptyxis.desktop:new-window\nkitty.desktop\n' > "$HOME/.config/ubuntu-xdg-terminals.list"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1; local rc=$?
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  assert_eq "$rc" "0"
+  assert_eq "$(cat "$HOME/.config/ubuntu-xdg-terminals.list")" "$(printf 'kitty.desktop\norg.gnome.Ptyxis.desktop:new-window')"
+  assert_contains "$STUB_LOG" "gsettings set org.gnome.desktop.default-applications.terminal exec $HOME/.local/bin/kitty"
+}
+
 test_gnome_module_loads_desktop_settings() {
   stub_gnome_tools
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1
@@ -1337,10 +1433,11 @@ stub_cleanup_tools() {
 
 test_cleanup_apps_removes_only_installed_packages() {
   stub_cleanup_tools
-  printf 'rhythmbox\ngedit\n' > "$SANDBOX/installed"
+  printf 'rhythmbox\ngedit\nshowtime\n' > "$SANDBOX/installed"
   DUCAL_CLEANUP=apps "$ROOT/install.sh" --only cleanup >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
-  assert_contains "$STUB_LOG" "apt-get remove -y rhythmbox gedit"
+  # showtime: the video player of Ubuntu 25.10 and newer
+  assert_contains "$STUB_LOG" "apt-get remove -y rhythmbox showtime gedit"
   assert_not_contains "$STUB_LOG" "totem"
   assert_not_contains "$STUB_LOG" "autoremove"
 }
@@ -1375,9 +1472,10 @@ test_cleanup_office_removes_libreoffice_and_both_thunderbirds() {
 
 test_cleanup_telemetry_removes_reporting_tools() {
   stub_cleanup_tools
-  printf 'ubuntu-report\napport\nwhoopsie\nkerneloops\n' > "$SANDBOX/installed"
+  printf 'ubuntu-report\nubuntu-insights\napport\nwhoopsie\nkerneloops\n' > "$SANDBOX/installed"
   DUCAL_CLEANUP=telemetry "$ROOT/install.sh" --only cleanup >/dev/null 2>&1
-  assert_contains "$STUB_LOG" "apt-get remove -y ubuntu-report apport whoopsie kerneloops"
+  # ubuntu-insights replaces ubuntu-report on Ubuntu 25.10 and newer
+  assert_contains "$STUB_LOG" "apt-get remove -y ubuntu-report ubuntu-insights apport whoopsie kerneloops"
 }
 
 test_cleanup_services_are_disabled_not_removed() {
@@ -1390,6 +1488,21 @@ test_cleanup_services_are_disabled_not_removed() {
   done
   assert_contains "$STUB_LOG" "systemctl --user mask --now tracker-miner-fs-3.service"
   assert_not_contains "$STUB_LOG" "apt-get remove"
+}
+
+# GNOME 47+ renamed the file indexer to localsearch: mask the one this system has
+test_cleanup_services_mask_only_the_indexer_this_release_has() {
+  stub_cleanup_tools
+  cat > "$SANDBOX/stubs/systemctl" <<'EOF'
+#!/usr/bin/env bash
+echo "systemctl $*" >> "$STUB_LOG"
+[[ $* == "--user list-unit-files tracker-miner-fs-3.service" ]] && exit 1
+exit 0
+EOF
+  DUCAL_CLEANUP=services "$ROOT/install.sh" --only cleanup >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "systemctl --user mask --now localsearch-3.service"
+  assert_not_contains "$STUB_LOG" "mask --now tracker-miner-fs-3.service"
 }
 
 test_cleanup_does_nothing_by_default_without_a_terminal() {
@@ -1434,6 +1547,7 @@ test_cleanup_restore_services_reenables_them() {
   assert_contains "$STUB_LOG" "systemctl enable --now cups.service"
   assert_contains "$STUB_LOG" "systemctl enable --now cups-browsed.service"
   assert_contains "$STUB_LOG" "systemctl --user unmask tracker-miner-fs-3.service"
+  assert_contains "$STUB_LOG" "systemctl --user unmask localsearch-3.service"
 }
 
 # ---------------------------------------------------------------- wallpaper
