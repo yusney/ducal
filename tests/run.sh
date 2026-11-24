@@ -496,6 +496,18 @@ stub_package_tools() {
   printf '#!/usr/bin/env bash\necho "curl $*" >> "$STUB_LOG"\nexit 1\n' > "$s/curl"
   # dpkg-query reports only the packages listed in $SANDBOX/installed as installed
   printf '#!/usr/bin/env bash\npkg="${@: -1}"\ngrep -qx "$pkg" "%s/installed" && echo "install ok installed" || exit 1\n' "$SANDBOX" > "$s/dpkg-query"
+  # apt-cache: no candidate for packages in $SANDBOX/no-candidate, nor for those
+  # in $SANDBOX/stale-lists until `apt-get update` ran
+  cat > "$s/apt-cache" <<EOF
+#!/usr/bin/env bash
+pkg="\${@: -1}"
+if grep -qx "\$pkg" "$SANDBOX/no-candidate" 2>/dev/null ||
+  { grep -qx "\$pkg" "$SANDBOX/stale-lists" 2>/dev/null && ! grep -q "apt-get update" "\$STUB_LOG"; }; then
+  printf '%s:\\n  Installed: (none)\\n  Candidate: (none)\\n' "\$pkg"
+else
+  printf '%s:\\n  Installed: (none)\\n  Candidate: 1.0\\n' "\$pkg"
+fi
+EOF
   chmod +x "$s"/*
   : > "$SANDBOX/installed"
 }
@@ -509,6 +521,29 @@ test_apt_install_only_installs_missing_packages() {
   bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install git btop" >/dev/null 2>&1
   assert_contains "$STUB_LOG" "apt-get install -y btop"
   assert_not_contains "$STUB_LOG" "install -y git"
+}
+
+# A newer Ubuntu may drop a package: skip it with a warning, install the rest
+test_apt_install_skips_a_package_this_release_does_not_have() {
+  stub_package_tools
+  echo "gtk2-engines-murrine" > "$SANDBOX/no-candidate"
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install btop gtk2-engines-murrine" >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "apt-get install -y btop"
+  assert_not_contains "$STUB_LOG" "gtk2-engines-murrine"
+  assert_contains "$SANDBOX/err" "gtk2-engines-murrine is not available on this release, skipping it"
+  assert_eq "$(grep -c 'apt-get update' "$STUB_LOG")" "1" "lists refreshed once before giving up"
+}
+
+# Old package lists are not a missing package: refresh them, then install
+test_apt_install_refreshes_stale_lists_before_skipping() {
+  stub_package_tools
+  printf 'btop\nfish\n' > "$SANDBOX/stale-lists"
+  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install btop fish" >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  assert_eq "$rc" "0"
+  assert_eq "$(grep -c 'apt-get update' "$STUB_LOG")" "1"
+  assert_contains "$STUB_LOG" "apt-get install -y btop fish"
+  assert_not_contains "$SANDBOX/err" "skipping"
 }
 
 test_apt_install_does_nothing_when_all_installed() {

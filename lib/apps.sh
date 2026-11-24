@@ -9,10 +9,27 @@ DUCAL_FONT_DIR="$HOME/.local/share/fonts/JetBrainsMonoNerd"
 
 is_pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
 
-# apt_install PKG... — installs only the packages that are missing.
+has_apt_candidate() { apt-cache policy "$1" 2>/dev/null | grep -q '^ *Candidate: [^(]'; }
+
+# apt_install PKG... — installs only the packages that are missing. A package
+# this release does not have (newer Ubuntu releases drop some) is skipped with
+# a warning, after refreshing the package lists once in case they are old.
 apt_install() {
-  local missing=() p
+  local missing=() available=() p
   for p in "$@"; do is_pkg_installed "$p" || missing+=("$p"); done
+  [[ ${#missing[@]} -eq 0 ]] && return 0
+  for p in "${missing[@]}"; do
+    if ! has_apt_candidate "$p" && [[ -z ${DUCAL_APT_UPDATED:-} ]]; then
+      as_root apt-get update -qq || log_warn "apt-get update failed"
+      DUCAL_APT_UPDATED=1
+    fi
+    if has_apt_candidate "$p"; then
+      available+=("$p")
+    else
+      log_warn "$p is not available on this release, skipping it"
+    fi
+  done
+  missing=("${available[@]}")
   [[ ${#missing[@]} -eq 0 ]] && return 0
   log_step "apt: installing ${missing[*]}"
   as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
