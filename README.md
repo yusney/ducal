@@ -239,6 +239,7 @@ config/           configuration files linked or copied into ~/.config
 themes/<name>/    palette and per-tool color files for each theme
 templates/        files generated from a palette (GNOME Shell overlay)
 tests/run.sh      test suite (sandboxed HOME, no changes to your system)
+tests/containers.sh  real install of the terminal group in Ubuntu containers
 ```
 
 ## Adding a theme
@@ -265,6 +266,12 @@ tests/run.sh
 
 Tests run against a temporary `HOME` with stubbed desktop commands, so they never
 touch your real configuration.
+
+To check a real install on several Ubuntu releases, run `tests/containers.sh`
+(Docker and internet needed, a few minutes per release). It installs the
+`terminal` group as a sudo user in fresh `ubuntu:24.04`, `ubuntu:25.10` and
+`ubuntu:26.04` containers and checks that every tool runs. Pass releases to pick
+them: `tests/containers.sh 26.04`.
 
 ## Credits
 
