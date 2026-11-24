@@ -291,6 +291,19 @@ test_preflight_warns_on_an_untested_version() {
   preflight preflight_system >/dev/null 2>"$SANDBOX/err"; local rc=$?
   assert_eq "$rc" "0"
   assert_contains "$SANDBOX/err" "22.04 is untested"
+  assert_contains "$SANDBOX/err" "ducal supports 24.04 or newer"
+}
+
+test_preflight_accepts_newer_ubuntu_releases() {
+  stub_preflight
+  local v
+  for v in 24.10 25.04 25.10 26.04 30.10; do
+    printf 'NAME="Ubuntu"\nVERSION_ID="%s"\nID=ubuntu\n' "$v" > "$DUCAL_SYSROOT/etc/os-release"
+    preflight preflight_system >"$SANDBOX/out" 2>"$SANDBOX/err"; local rc=$?
+    assert_eq "$rc" "0" "$v"
+    assert_not_contains "$SANDBOX/err" "untested"
+    assert_contains "$SANDBOX/out" "System: Ubuntu $v x86_64"
+  done
 }
 
 test_preflight_needs_gnome_for_the_desktop_groups() {

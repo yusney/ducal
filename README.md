@@ -23,7 +23,8 @@ use every day. Switch the whole desktop to another palette with a single command
 
 ## Requirements
 
-- Ubuntu 24.04 LTS with GNOME on x86_64 (other versions are untested). Only the
+- Ubuntu 24.04 LTS or newer with GNOME on x86_64 (tested on 24.04; the terminal tools
+  also on 25.10 and 26.04). Only the
   terminal tools? Ubuntu on WSL or a server works too (see [Choose what to install](#choose-what-to-install)).
 - A user with `sudo` access
 - An internet connection (packages and third-party assets are downloaded at install time)
@@ -35,8 +36,8 @@ sudo, no internet, a clock more than 5 minutes off (apt rejects package lists wi
 wrong date: fix it with `sudo timedatectl set-ntp true`), or the `gnome` / `system`
 groups chosen without a GNOME desktop.
 The GNOME check runs right after the menu, once those prerequisites are in place and
-before any group is installed. Another Ubuntu version or less than 5 GB free only shows
-a warning.
+before any group is installed. An Ubuntu older than 24.04, another distribution or less
+than 5 GB free only shows a warning.
 
 ## Install
 
