@@ -1417,10 +1417,11 @@ stub_cleanup_tools() {
 
 test_cleanup_apps_removes_only_installed_packages() {
   stub_cleanup_tools
-  printf 'rhythmbox\ngedit\n' > "$SANDBOX/installed"
+  printf 'rhythmbox\ngedit\nshowtime\n' > "$SANDBOX/installed"
   DUCAL_CLEANUP=apps "$ROOT/install.sh" --only cleanup >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
-  assert_contains "$STUB_LOG" "apt-get remove -y rhythmbox gedit"
+  # showtime: the video player of Ubuntu 25.10 and newer
+  assert_contains "$STUB_LOG" "apt-get remove -y rhythmbox showtime gedit"
   assert_not_contains "$STUB_LOG" "totem"
   assert_not_contains "$STUB_LOG" "autoremove"
 }
@@ -1455,9 +1456,10 @@ test_cleanup_office_removes_libreoffice_and_both_thunderbirds() {
 
 test_cleanup_telemetry_removes_reporting_tools() {
   stub_cleanup_tools
-  printf 'ubuntu-report\napport\nwhoopsie\nkerneloops\n' > "$SANDBOX/installed"
+  printf 'ubuntu-report\nubuntu-insights\napport\nwhoopsie\nkerneloops\n' > "$SANDBOX/installed"
   DUCAL_CLEANUP=telemetry "$ROOT/install.sh" --only cleanup >/dev/null 2>&1
-  assert_contains "$STUB_LOG" "apt-get remove -y ubuntu-report apport whoopsie kerneloops"
+  # ubuntu-insights replaces ubuntu-report on Ubuntu 25.10 and newer
+  assert_contains "$STUB_LOG" "apt-get remove -y ubuntu-report ubuntu-insights apport whoopsie kerneloops"
 }
 
 test_cleanup_services_are_disabled_not_removed() {
@@ -1470,6 +1472,21 @@ test_cleanup_services_are_disabled_not_removed() {
   done
   assert_contains "$STUB_LOG" "systemctl --user mask --now tracker-miner-fs-3.service"
   assert_not_contains "$STUB_LOG" "apt-get remove"
+}
+
+# GNOME 47+ renamed the file indexer to localsearch: mask the one this system has
+test_cleanup_services_mask_only_the_indexer_this_release_has() {
+  stub_cleanup_tools
+  cat > "$SANDBOX/stubs/systemctl" <<'EOF'
+#!/usr/bin/env bash
+echo "systemctl $*" >> "$STUB_LOG"
+[[ $* == "--user list-unit-files tracker-miner-fs-3.service" ]] && exit 1
+exit 0
+EOF
+  DUCAL_CLEANUP=services "$ROOT/install.sh" --only cleanup >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "systemctl --user mask --now localsearch-3.service"
+  assert_not_contains "$STUB_LOG" "mask --now tracker-miner-fs-3.service"
 }
 
 test_cleanup_does_nothing_by_default_without_a_terminal() {
@@ -1514,6 +1531,7 @@ test_cleanup_restore_services_reenables_them() {
   assert_contains "$STUB_LOG" "systemctl enable --now cups.service"
   assert_contains "$STUB_LOG" "systemctl enable --now cups-browsed.service"
   assert_contains "$STUB_LOG" "systemctl --user unmask tracker-miner-fs-3.service"
+  assert_contains "$STUB_LOG" "systemctl --user unmask localsearch-3.service"
 }
 
 # ---------------------------------------------------------------- wallpaper

@@ -165,9 +165,9 @@ installer asks for each group, or answer in advance with
 
 | Group | What it does |
 | --- | --- |
-| `apps` | Removes Rhythmbox, Totem, Shotwell, Camera, Transmission, Remmina, Clocks, Characters, Help, USB Creator, Document Scanner, Déjà Dup, Calendar, gedit and Text Editor |
+| `apps` | Removes Rhythmbox, Totem, Showtime, Shotwell, Camera, Transmission, Remmina, Clocks, Characters, Help, USB Creator, Document Scanner, Déjà Dup, Calendar, gedit and Text Editor |
 | `office` | Removes LibreOffice and Thunderbird (both the deb and the snap) |
-| `telemetry` | Removes ubuntu-report, apport, whoopsie and kerneloops |
+| `telemetry` | Removes ubuntu-report, ubuntu-insights, apport, whoopsie and kerneloops |
 | `services` | Disables (does not uninstall) file indexing, printing, 3G/4G modems and network discovery |
 
 Packages are removed with `apt-get remove`, so your documents and settings stay in your

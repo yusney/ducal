@@ -8,13 +8,13 @@ DUCAL_CLEANUP_GROUPS=(apps office telemetry services)
 
 # Apps the ducal setup replaces or most developers do not need
 CLEANUP_APPS=(
-  rhythmbox totem shotwell gnome-snapshot              # media
+  rhythmbox totem showtime shotwell gnome-snapshot     # media (showtime: video on 25.10+)
   transmission-gtk remmina gnome-clocks gnome-characters # utilities
   yelp usb-creator-gtk simple-scan deja-dup gnome-calendar
   gedit gnome-text-editor                              # replaced by Neovim / VS Code
 )
 CLEANUP_OFFICE=(libreoffice-common libreoffice-core thunderbird)
-CLEANUP_TELEMETRY=(ubuntu-report apport whoopsie kerneloops)
+CLEANUP_TELEMETRY=(ubuntu-report ubuntu-insights apport whoopsie kerneloops) # ubuntu-insights: 25.10+
 
 # System units disabled by the services group
 CLEANUP_SYSTEM_UNITS=(
@@ -22,13 +22,14 @@ CLEANUP_SYSTEM_UNITS=(
   ModemManager.service                                    # 3G/4G modems
   avahi-daemon.service avahi-daemon.socket                # network discovery
 )
-CLEANUP_USER_UNITS=(tracker-miner-fs-3.service) # file indexing
+# File indexing: tracker on 24.04, renamed localsearch on GNOME 47+ (Ubuntu 24.10+)
+CLEANUP_USER_UNITS=(tracker-miner-fs-3.service localsearch-3.service)
 
 cleanup_group_description() {
   case $1 in
     apps) echo "Remove apps you probably do not need (music, video, photos, torrents, remote desktop, clocks, text editors...)" ;;
     office) echo "Remove LibreOffice and Thunderbird (including the Thunderbird snap)" ;;
-    telemetry) echo "Remove usage statistics and crash reporting (ubuntu-report, apport, whoopsie, kerneloops)" ;;
+    telemetry) echo "Remove usage statistics and crash reporting (ubuntu-report, ubuntu-insights, apport, whoopsie, kerneloops)" ;;
     services) echo "Disable file indexing, printing, mobile modems and network discovery (not uninstalled)" ;;
   esac
 }
@@ -80,6 +81,8 @@ cleanup_services() {
     as_root systemctl disable --now "$unit" 2>/dev/null || log_warn "Skipped $unit (not installed or already off)"
   done
   for unit in "${CLEANUP_USER_UNITS[@]}"; do
+    # mask would accept a unit this release does not have: skip those
+    systemctl --user list-unit-files "$unit" >/dev/null 2>&1 || continue
     systemctl --user mask --now "$unit" 2>/dev/null || log_warn "Could not disable $unit (run the installer as your user, not root)"
   done
 }
