@@ -15,6 +15,7 @@ use every day. Switch the whole desktop to another palette with a single command
 | --- | --- |
 | Desktop | GNOME with matching GTK and shell themes, Tela icons, Vimix cursors, tiling via Forge, hidden dock, slim top bar with numbered workspaces |
 | Launcher | Search Light on `Super+Space` |
+| Clipboard | History of the last 50 copies, text and images, on `Super+Shift+V` (Clipboard Indicator) |
 | Terminal | kitty + fish + Starship, JetBrainsMono Nerd Font |
 | Editor | Neovim with LazyVim, VS Code themed to match |
 | Tools | btop, lazygit, yazi, git, gh, ripgrep, fd, [Claude Code CLI](https://docs.claude.com/en/docs/claude-code), [opencode](https://opencode.ai) |
@@ -70,7 +71,7 @@ which items you want from the groups that have them:
 | `terminal` | fish, Neovim, Starship, git, gh, lazygit, yazi, btop, ripgrep, fd, Claude Code CLI with its status line, plugins and MCP servers, gentle-ai, engram, opencode, their configuration and colors |
 | `languages` | Your pick of Node.js (fnm), Go, Rust and Docker |
 | `desktop-apps` | kitty and JetBrainsMono Nerd Font, plus your pick of Chrome, VS Code, Steam and Discord |
-| `gnome` | Extensions, tiling, top bar, launcher, GTK and shell themes, icons, cursors, wallpapers, shortcuts |
+| `gnome` | Extensions, tiling, top bar, launcher, clipboard history, GTK and shell themes, icons, cursors, wallpapers, shortcuts |
 | `system` | Login screen and boot splash with the ducal mark |
 | `cleanup` | Removes preinstalled software you do not need (see [Optional cleanup](#optional-cleanup)) |
 
@@ -261,6 +262,7 @@ The essentials. See the [full guide](docs/keybindings.md), or run `ducal keys`.
 | --- | --- |
 | `Super+Space` | Launcher (`Ctrl+Space` also works) |
 | `Super+B` | Search the web (or open an address) in your default browser |
+| `Super+Shift+V` | Clipboard history (text and images) |
 | `Ctrl+Alt+T` | Terminal (kitty) |
 | `Super+Q` | Close the window (`Alt+F4` also works) |
 | `Super+1…4` | Go to workspace 1–4 |

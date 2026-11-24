@@ -1097,7 +1097,7 @@ test_gnome_module_installs_only_missing_extensions() {
   assert_contains "$STUB_LOG" "uuid=blur-my-shell@aunetx&shell_version=46"
   assert_not_contains "$STUB_LOG" "uuid=forge@jmmaranan.com"
   assert_not_contains "$STUB_LOG" "uuid=dash-to-dock@micxgx.gmail.com"
-  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "5" "5 missing extensions"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "6" "6 missing extensions"
 }
 
 test_gnome_module_enables_ours_and_keeps_user_extensions() {
@@ -1122,7 +1122,7 @@ test_gnome_module_skips_an_extension_without_a_build() {
   assert_eq "$rc" "0"
   assert_contains "$SANDBOX/out" "search-light@icedman.github.com is not available for GNOME Shell 46, skipping it"
   assert_contains "$SANDBOX/out" "Desktop settings applied"
-  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "6" "the other 6 extensions"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "7" "the other 7 extensions"
   [[ $(cat "$SANDBOX/enabled") != *search-light* ]] || fail "enabled: $(cat "$SANDBOX/enabled")"
 }
 
@@ -1159,6 +1159,20 @@ test_gnome_module_gives_search_light_one_shortcut_per_key() {
   assert_contains "$SANDBOX/dconf-loaded" "shortcut-search=['<Super>space']"
   assert_contains "$SANDBOX/dconf-loaded" "secondary-shortcut-search=['<Control>space']"
   assert_not_contains "$SANDBOX/dconf-loaded" "shortcut-search=['<Super>space', '<Control>space']"
+}
+
+# Clipboard history: Clipboard Indicator, 50 items with images, on Super+Shift+V
+# (Super+V stays Forge's vertical split)
+test_gnome_module_sets_up_clipboard_history() {
+  stub_gnome_tools
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "uuid=clipboard-indicator@tudmotu.com&shell_version=46"
+  [[ $(cat "$SANDBOX/enabled") == *"'clipboard-indicator@tudmotu.com'"* ]] || fail "not enabled: $(cat "$SANDBOX/enabled")"
+  assert_contains "$SANDBOX/dconf-loaded" "[org/gnome/shell/extensions/clipboard-indicator]"
+  assert_contains "$SANDBOX/dconf-loaded" "history-size=50"
+  assert_contains "$SANDBOX/dconf-loaded" "cache-images=true"
+  assert_contains "$SANDBOX/dconf-loaded" "toggle-menu=['<Shift><Super>v']"
 }
 
 test_gnome_module_loads_desktop_settings() {

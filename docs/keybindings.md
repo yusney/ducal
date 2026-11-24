@@ -8,6 +8,7 @@
 | --- | --- |
 | `Super+Space` | Open the launcher (apps, files, settings); `Ctrl+Space` also works |
 | `Super+B` | Search the web, or open an address, in the default browser |
+| `Super+Shift+V` | Clipboard history: the last 50 copies, text and images (`Super+V` is Forge's vertical split) |
 | `Ctrl+Alt+T` | Open a terminal (kitty) |
 | `Super+Q` | Close the focused window (`Alt+F4` also works) |
 | `Ctrl+Alt+L` | Lock the screen |
