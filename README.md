@@ -136,8 +136,17 @@ shows a warning, and the rest of the install goes on.
 Installing Docker adds your user to the `docker` group, which grants root-equivalent
 access through the Docker daemon.
 
-The system module themes the login screen and the boot splash. It changes system
-files, so it asks first (or set `DUCAL_SYSTEM=yes` / `no`). Both show the ducal mark,
+The system module themes the login screen and the boot splash. It is **not part of
+any profile and not ticked in the checklist**: tick `system` yourself, or answer in
+advance with the one-line install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yusney/ducal/main/boot.sh | DUCAL_SYSTEM=yes bash
+```
+
+It changes system files, so it asks first (or set `DUCAL_SYSTEM=yes` / `no`).
+It is tested on Ubuntu 24.04 only: newer releases changed the Ubuntu theme files it
+reads, so it may stop there with an error. Both show the ducal mark,
 a D under a ducal coronet painted in the theme accent, next to the distribution name.
 Use your own logo instead with `DUCAL_LOGO=/path/to/logo.svg`. Undo it at any time:
 
@@ -176,6 +185,49 @@ apps also removes the `ubuntu-desktop` metapackages, so ducal first marks the re
 the desktop as manually installed: a later `apt autoremove` will not touch it.
 Turn the services back on with `ducal cleanup restore-services`.
 
+## Troubleshooting
+
+### `Super+Space` does not open the launcher
+
+1. **Log out and back in** after the install. New GNOME extensions only load in a
+   new session; on Ubuntu 25.10 and newer (Wayland only) there is no other way.
+2. **Check that the extension is running**:
+
+   ```bash
+   LC_ALL=C gnome-extensions info search-light@icedman.github.com | grep -E "Enabled|State"
+   ```
+
+   You want `Enabled: Yes` and `State: ACTIVE`. When extensions.gnome.org has no
+   build for your GNOME Shell, the installer warns
+   `search-light@icedman.github.com is not available for GNOME Shell <version>, skipping it`
+   and goes on without it.
+3. **In a virtual machine**, the host often keeps the `Super` key for itself. Capture
+   the keyboard in the virtual machine (VirtualBox, VMware and GNOME Boxes each have a
+   key or menu for it), or use `Ctrl+Space`.
+4. **Another program took the shortcut.** IBus, the input method framework, also
+   uses `Super+Space`. See it with
+   `gsettings get org.freedesktop.ibus.general.hotkey triggers`, and free it with
+   `gsettings set org.freedesktop.ibus.general.hotkey triggers "[]"`.
+
+### No themed login screen or boot splash
+
+- The `system` group is not installed unless you choose it (see
+  [Choose what to install](#choose-what-to-install)). Run the installer again with
+  `DUCAL_SYSTEM=yes`.
+- In a virtual machine the boot splash often does not show even when it is installed,
+  because of how the virtual display starts. The login screen should still change.
+- On releases newer than 24.04 the `system` group is untested. If it stops with an
+  error, `ducal system restore` puts the distribution's theme back.
+
+### The Claude Code status line does not show
+
+- If you already had another status line, the installer asks whether to replace it.
+  Answer in advance with `DUCAL_CLAUDE_STATUSLINE=replace`.
+- Open a new terminal before starting `claude`, so it finds Node and ccstatusline.
+- **On WSL**, arrows and icons in the status line need a Nerd Font in **Windows
+  Terminal**, installed in Windows (for example JetBrainsMono Nerd Font) and picked in
+  the Ubuntu profile. Without it they show as boxes or question marks.
+
 ## Usage
 
 ```bash
@@ -200,7 +252,7 @@ The essentials. See the [full guide](docs/keybindings.md), or run `ducal keys`.
 
 | Shortcut | Action |
 | --- | --- |
-| `Super+Space` | Launcher |
+| `Super+Space` | Launcher (`Ctrl+Space` also works) |
 | `Super+B` | Search the web (or open an address) in your default browser |
 | `Ctrl+Alt+T` | Terminal (kitty) |
 | `Super+Q` | Close the window (`Alt+F4` also works) |
