@@ -258,6 +258,16 @@ test_preflight_installs_missing_prerequisites() {
   assert_contains "$STUB_LOG" "apt-get install -y git whiptail"
 }
 
+test_preflight_stops_when_a_prerequisite_is_not_available() {
+  stub_preflight
+  printf '%s\n' curl python3 ca-certificates git > "$SANDBOX/installed"
+  echo whiptail > "$SANDBOX/no-candidate"
+  preflight preflight_system >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  assert_eq "$rc" "1"
+  assert_contains "$SANDBOX/err" "whiptail is not available from apt"
+  assert_not_contains "$STUB_LOG" "apt-get install"
+}
+
 test_preflight_stops_on_an_unsupported_system() {
   stub_preflight
   local err
@@ -503,10 +513,15 @@ stub_package_tools() {
 pkg="\${@: -1}"
 if grep -qx "\$pkg" "$SANDBOX/no-candidate" 2>/dev/null ||
   { grep -qx "\$pkg" "$SANDBOX/stale-lists" 2>/dev/null && ! grep -q "apt-get update" "\$STUB_LOG"; }; then
-  printf '%s:\\n  Installed: (none)\\n  Candidate: (none)\\n' "\$pkg"
+  version="(none)"
 else
-  printf '%s:\\n  Installed: (none)\\n  Candidate: 1.0\\n' "\$pkg"
+  version=1.0
 fi
+# Like the real one: localized unless LC_ALL=C, and a long version table after
+# the candidate (a reader that stops early makes it fail with SIGPIPE)
+label=Candidate; [[ \${LC_ALL:-} == C ]] || label=Candidato
+printf '%s:\\n  Installed: (none)\\n  %s: %s\\n  Version table:\\n' "\$pkg" "\$label" "\$version"
+seq 1 50000
 EOF
   chmod +x "$s"/*
   : > "$SANDBOX/installed"
@@ -527,7 +542,8 @@ test_apt_install_only_installs_missing_packages() {
 test_apt_install_skips_a_package_this_release_does_not_have() {
   stub_package_tools
   echo "gtk2-engines-murrine" > "$SANDBOX/no-candidate"
-  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install btop gtk2-engines-murrine" >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  # pipefail, as in install.sh
+  bash -o pipefail -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install btop gtk2-engines-murrine" >/dev/null 2>"$SANDBOX/err"; local rc=$?
   assert_eq "$rc" "0"
   assert_contains "$STUB_LOG" "apt-get install -y btop"
   assert_not_contains "$STUB_LOG" "gtk2-engines-murrine"
@@ -539,7 +555,7 @@ test_apt_install_skips_a_package_this_release_does_not_have() {
 test_apt_install_refreshes_stale_lists_before_skipping() {
   stub_package_tools
   printf 'btop\nfish\n' > "$SANDBOX/stale-lists"
-  bash -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install btop fish" >/dev/null 2>"$SANDBOX/err"; local rc=$?
+  bash -o pipefail -c "source '$ROOT/lib/common.sh'; source '$ROOT/lib/apps.sh'; apt_install btop fish" >/dev/null 2>"$SANDBOX/err"; local rc=$?
   assert_eq "$rc" "0"
   assert_eq "$(grep -c 'apt-get update' "$STUB_LOG")" "1"
   assert_contains "$STUB_LOG" "apt-get install -y btop fish"

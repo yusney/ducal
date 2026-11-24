@@ -77,6 +77,11 @@ preflight_system() {
   for p in "${DUCAL_PREREQUISITES[@]}"; do is_pkg_installed "$p" || missing+=("$p"); done
   if [[ ${#missing[@]} -gt 0 ]]; then
     as_root apt-get update -qq || die "apt-get update failed: check your connection and apt sources"
+    DUCAL_APT_UPDATED=1
+    # apt_install skips what apt does not have; the installer cannot go on without these
+    for p in "${missing[@]}"; do
+      has_apt_candidate "$p" || die "$p is not available from apt: check that the main and universe components are enabled"
+    done
     apt_install "${missing[@]}" || die "Could not install ${missing[*]}"
   fi
   log_ok "Prerequisites ready: ${DUCAL_PREREQUISITES[*]}"

@@ -9,7 +9,13 @@ DUCAL_FONT_DIR="$HOME/.local/share/fonts/JetBrainsMonoNerd"
 
 is_pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
 
-has_apt_candidate() { apt-cache policy "$1" 2>/dev/null | grep -q '^ *Candidate: [^(]'; }
+# LC_ALL=C: apt-cache translates "Candidate". The whole output is read first:
+# `| grep -q` would stop early and, under pipefail, fail with SIGPIPE.
+has_apt_candidate() {
+  local policy
+  policy=$(LC_ALL=C apt-cache policy "$1" 2>/dev/null) || return 1
+  [[ $policy =~ Candidate:\ [^\(] ]]
+}
 
 # apt_install PKG... — installs only the packages that are missing. A package
 # this release does not have (newer Ubuntu releases drop some) is skipped with
