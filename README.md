@@ -189,9 +189,20 @@ Turn the services back on with `ducal cleanup restore-services`.
 
 ### `Super+Space` does not open the launcher
 
-1. **Log out and back in** after the install. New GNOME extensions only load in a
+1. **Only `Ctrl+Super+Space` works?** Installs before this fix gave Search Light both
+   shortcuts in one setting, which it joins into one invalid shortcut. Run the
+   installer again, or fix it by hand:
+
+   ```bash
+   dconf write /org/gnome/shell/extensions/search-light/shortcut-search "['<Super>space']"
+   dconf write /org/gnome/shell/extensions/search-light/secondary-shortcut-search "['<Control>space']"
+   ```
+
+   GNOME Shell logs `Unable to grab accelerator` when a shortcut is not valid:
+   `journalctl --user -b | grep -i accelerator`.
+2. **Log out and back in** after the install. New GNOME extensions only load in a
    new session; on Ubuntu 25.10 and newer (Wayland only) there is no other way.
-2. **Check that the extension is running**:
+3. **Check that the extension is running**:
 
    ```bash
    LC_ALL=C gnome-extensions info search-light@icedman.github.com | grep -E "Enabled|State"
@@ -201,13 +212,9 @@ Turn the services back on with `ducal cleanup restore-services`.
    build for your GNOME Shell, the installer warns
    `search-light@icedman.github.com is not available for GNOME Shell <version>, skipping it`
    and goes on without it.
-3. **In a virtual machine**, the host often keeps the `Super` key for itself. Capture
+4. **In a virtual machine**, the host often keeps the `Super` key for itself. Capture
    the keyboard in the virtual machine (VirtualBox, VMware and GNOME Boxes each have a
    key or menu for it), or use `Ctrl+Space`.
-4. **Another program took the shortcut.** IBus, the input method framework, also
-   uses `Super+Space`. See it with
-   `gsettings get org.freedesktop.ibus.general.hotkey triggers`, and free it with
-   `gsettings set org.freedesktop.ibus.general.hotkey triggers "[]"`.
 
 ### No themed login screen or boot splash
 

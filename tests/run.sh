@@ -1151,6 +1151,16 @@ test_gnome_module_makes_kitty_the_xdg_terminal_and_keeps_other_entries() {
   assert_contains "$STUB_LOG" "gsettings set org.gnome.desktop.default-applications.terminal exec $HOME/.local/bin/kitty"
 }
 
+# Search Light joins each shortcut list into ONE accelerator: two entries in one
+# key became the invalid "<Super>space<Control>space" (only Ctrl+Super+Space worked)
+test_gnome_module_gives_search_light_one_shortcut_per_key() {
+  stub_gnome_tools
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  assert_contains "$SANDBOX/dconf-loaded" "shortcut-search=['<Super>space']"
+  assert_contains "$SANDBOX/dconf-loaded" "secondary-shortcut-search=['<Control>space']"
+  assert_not_contains "$SANDBOX/dconf-loaded" "shortcut-search=['<Super>space', '<Control>space']"
+}
+
 test_gnome_module_loads_desktop_settings() {
   stub_gnome_tools
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1
