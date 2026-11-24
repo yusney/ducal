@@ -9,6 +9,7 @@ DUCAL_EXTENSIONS=(
   search-light@icedman.github.com                      # launcher on Super+Space
   forge@jmmaranan.com                                  # tiling windows
   space-bar@luchrioh                                   # numbered workspaces in the top bar
+  clipboard-indicator@tudmotu.com                      # clipboard history (Super+Shift+V)
 )
 
 # Ubuntu defaults that clash with the ducal setup
