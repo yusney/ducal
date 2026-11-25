@@ -10,7 +10,7 @@ DUCAL_ULAUNCHER_KEY=59EBDE772980C381CA13FA59FAF1020699503176 # Launchpad PPA for
 # the PPA cannot be added.
 install_ulauncher() {
   local list=/etc/apt/sources.list.d/ulauncher.list key=/etc/apt/keyrings/ulauncher.asc
-  if ! has_cmd ulauncher; then
+  if ! is_pkg_installed ulauncher; then
     log_step "Installing Ulauncher"
     as_root install -m 0755 -d /etc/apt/keyrings
     if ! curl -fsSL --retry 2 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x$DUCAL_ULAUNCHER_KEY" |
@@ -24,7 +24,7 @@ install_ulauncher() {
     as_root apt-get update -qq || log_warn "apt-get update failed"
     DUCAL_APT_UPDATED=1
     apt_install ulauncher
-    if ! has_cmd ulauncher; then
+    if ! is_pkg_installed ulauncher; then
       as_root rm -f "$list" # a repository that gave nothing must not slow every apt update
       return 1
     fi
@@ -46,14 +46,17 @@ install_ulauncher() {
 }
 
 # ulauncher_add_shortcuts — web searches typed as "KEYWORD query": yt (YouTube) and
-# gh (GitHub), next to Ulauncher's own g (Google), so (Stack Overflow) and wiki.
-# Keeps every shortcut the user has and never adds a keyword twice. True when it
-# changed the file (Ulauncher reads it only when it starts).
+# gh (GitHub) with their icons, next to Ulauncher's own g (Google), so (Stack
+# Overflow) and wiki. Keeps every shortcut the user has and never adds a keyword
+# twice. True when it changed the file (Ulauncher reads it only when it starts).
 ulauncher_add_shortcuts() {
-  python3 - "$HOME/.config/ulauncher/shortcuts.json" <<'EOF'
+  local icons="$HOME/.config/ulauncher/icons"
+  mkdir -p "$icons"
+  cp "$DUCAL_ROOT"/config/ulauncher/icons/*.svg "$icons/"
+  python3 - "$HOME/.config/ulauncher/shortcuts.json" "$icons" <<'EOF'
 import json, os, sys, time, uuid
 
-path = sys.argv[1]
+path, icons = sys.argv[1], sys.argv[2]
 media = "/usr/share/ulauncher/media/"
 if os.path.exists(path):
     with open(path) as f:
@@ -70,15 +73,23 @@ else:
                             "is_default_search": True}
 
 ours = [
-    ("YouTube", "yt", "https://www.youtube.com/results?search_query=%s"),
-    ("GitHub", "gh", "https://github.com/search?q=%s"),
+    ("YouTube", "yt", "https://www.youtube.com/results?search_query=%s", "youtube.svg"),
+    ("GitHub", "gh", "https://github.com/search?q=%s", "github.svg"),
 ]
-taken = {r.get("keyword") for r in records.values()}
-added = [o for o in ours if o[1] not in taken]
-for name, keyword, cmd in added:
-    records[keyword] = {"name": name, "keyword": keyword, "cmd": cmd, "icon": None,
-                        "is_default_search": False}
-if not added and os.path.exists(path):
+changed = False
+for name, keyword, cmd, icon in ours:
+    icon = os.path.join(icons, icon)
+    mine = [r for r in records.values() if r.get("keyword") == keyword]
+    if not mine:
+        records[keyword] = {"name": name, "keyword": keyword, "cmd": cmd, "icon": icon,
+                            "is_default_search": False}
+        changed = True
+    # shortcuts ducal made before it had icons
+    for r in mine:
+        if r.get("cmd") == cmd and not r.get("icon"):
+            r["icon"] = icon
+            changed = True
+if not changed and os.path.exists(path):
     sys.exit(1)
 
 result, now = {}, time.time()
