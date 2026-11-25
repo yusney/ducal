@@ -1128,17 +1128,18 @@ mkdir -p "$SANDBOX/dconf-db"
 exit 0
 EOF
   # Package tools for Ulauncher: sudo only logs, except that installing ulauncher
-  # puts a ulauncher command on the PATH; apt has no ulauncher when
+  # marks ulauncher as installed; apt has no ulauncher when
   # $SANDBOX/no-ulauncher exists
   cat > "$s/sudo" <<EOF
 #!/usr/bin/env bash
 echo "sudo \$*" >> "\$STUB_LOG"
 if [[ \$* == *"install"*ulauncher* && ! -f "$SANDBOX/no-ulauncher" ]]; then
-  printf '#!/usr/bin/env bash\\nexit 0\\n' > "$s/ulauncher"; chmod +x "$s/ulauncher"
+  touch "$SANDBOX/ulauncher-installed"
 fi
 exit 0
 EOF
-  printf '#!/usr/bin/env bash\nexit 1\n' > "$s/dpkg-query"
+  # dpkg-query: only ulauncher, once the stub apt installed it (never the host's packages)
+  printf '#!/usr/bin/env bash\n[[ ${@: -1} == ulauncher && -f "%s/ulauncher-installed" ]] && echo "install ok installed" || exit 1\n' "$SANDBOX" > "$s/dpkg-query"
   cat > "$s/apt-cache" <<EOF
 #!/usr/bin/env bash
 [[ -f "$SANDBOX/no-ulauncher" ]] && echo "  Candidate: (none)" || echo "  Candidate: 1.0"
@@ -1289,6 +1290,18 @@ test_gnome_module_adds_youtube_and_github_shortcuts_to_ulauncher() {
   assert_contains "$f" "https://google.com/search?q=%s"
 }
 
+# yt and gh show the YouTube and GitHub icons; shortcuts made before the icons
+# get them too, the user's own shortcuts on the same keyword do not
+test_gnome_module_gives_the_youtube_and_github_shortcuts_their_icons() {
+  stub_gnome_tools
+  mkdir -p "$HOME/.config/ulauncher"
+  echo '{"a1": {"id": "a1", "name": "GitHub", "keyword": "gh", "cmd": "https://github.com/search?q=%s", "icon": null, "is_default_search": false, "run_without_argument": false, "added": 1}}' > "$HOME/.config/ulauncher/shortcuts.json"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  local f="$HOME/.config/ulauncher/shortcuts.json" icons="$HOME/.config/ulauncher/icons"
+  [[ -s $icons/youtube.svg && -s $icons/github.svg ]] || fail "icons not copied"
+  assert_eq "$(python3 -c 'import json,sys; r={x["keyword"]: x for x in json.load(open(sys.argv[1])).values()}; print(r["yt"]["icon"], r["gh"]["icon"])' "$f")" "$icons/youtube.svg $icons/github.svg"
+}
+
 # Shortcuts the user already has stay as they are; only missing keywords are added
 test_gnome_module_keeps_the_users_ulauncher_shortcuts() {
   stub_gnome_tools
@@ -1298,6 +1311,7 @@ test_gnome_module_keeps_the_users_ulauncher_shortcuts() {
   local f="$HOME/.config/ulauncher/shortcuts.json"
   assert_contains "$f" "https://example.com/%s"
   assert_not_contains "$f" "youtube.com"
+  assert_not_contains "$f" "icons/youtube.svg"
   assert_contains "$f" "https://github.com/search?q=%s"
   assert_not_contains "$f" "google.com"
 }

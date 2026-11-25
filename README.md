@@ -337,6 +337,7 @@ ducal stands on the shoulders of these projects:
 - [gruvbox.nvim](https://github.com/ellisonleao/gruvbox.nvim) by ellisonleao (MIT)
 - [Starship](https://starship.rs) presets (ISC)
 - [Forge](https://github.com/forge-ext/forge), [Ulauncher](https://ulauncher.io), [Space Bar](https://github.com/christopher-l/space-bar) and other GNOME extensions by their authors
+- [Simple Icons](https://simpleicons.org) (CC0) for the YouTube and GitHub icons in the launcher
 
 Third-party themes are downloaded at install time and are not
 redistributed in this repository.
