@@ -1067,14 +1067,25 @@ if [[ \$2 == org.gnome.shell && \$key == *-extensions ]]; then
   [[ \$1 == get ]] && cat "\$f"
   [[ \$1 == set ]] && echo "\$4" > "\$f"
 fi
+if [[ \$1 == get && \$key == toggle-application-view ]]; then
+  cat "$SANDBOX/app-view" 2>/dev/null || echo "['<Super>a']"
+fi
 exit 0
 EOF
   cat > "$s/curl" <<'EOF'
 #!/usr/bin/env bash
 echo "curl $*" >> "$STUB_LOG"
-# uuids listed in $SANDBOX/unavailable have no build for this GNOME Shell
+# uuids listed in $SANDBOX/unavailable have no build at all; those in
+# $SANDBOX/outdated only have builds for older GNOME Shells (the site still
+# answers with one, like extensions.gnome.org does)
 for a in "$@"; do [[ $a == *extension-info* ]] && grep -qF "$(sed 's/.*uuid=//; s/&.*//' <<<"$a")" "$(dirname "$STUB_LOG")/unavailable" 2>/dev/null && exit 22; done
-for a in "$@"; do [[ $a == *extension-info* ]] && { echo '{"download_url": "/download-extension/x.shell-extension.zip?version_tag=1"}'; exit 0; }; done
+for a in "$@"; do
+  [[ $a == *extension-info* ]] || continue
+  shells='"45": {"pk": 1}, "46": {"pk": 1}'
+  grep -qF "$(sed 's/.*uuid=//; s/&.*//' <<<"$a")" "$(dirname "$STUB_LOG")/outdated" 2>/dev/null && shells='"44": {"pk": 1}, "45": {"pk": 1}'
+  echo "{\"shell_version_map\": {$shells}, \"download_url\": \"/download-extension/x.shell-extension.zip?version_tag=1\"}"
+  exit 0
+done
 out=""; while [[ $# -gt 0 ]]; do [[ $1 == -o ]] && out=$2; shift; done
 [[ -n $out ]] && echo zip > "$out"
 exit 0
@@ -1124,6 +1135,68 @@ test_gnome_module_skips_an_extension_without_a_build() {
   assert_contains "$SANDBOX/out" "Desktop settings applied"
   assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "7" "the other 7 extensions"
   [[ $(cat "$SANDBOX/enabled") != *search-light* ]] || fail "enabled: $(cat "$SANDBOX/enabled")"
+}
+
+# extensions.gnome.org answers with the newest build even when it does not support
+# this GNOME Shell: GNOME then never loads it (Search Light on GNOME 50 and 51)
+test_gnome_module_skips_an_extension_built_for_an_older_gnome() {
+  stub_gnome_tools
+  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
+  "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$SANDBOX/out" "search-light@icedman.github.com does not support GNOME Shell 46 yet, skipping it"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "7" "the other 7 extensions"
+  [[ $(cat "$SANDBOX/enabled") != *search-light* ]] || fail "enabled: $(cat "$SANDBOX/enabled")"
+}
+
+# An extension installed before a GNOME upgrade: replaced when a newer build
+# supports this GNOME Shell, skipped otherwise
+test_gnome_module_replaces_an_installed_extension_that_does_not_support_this_gnome() {
+  stub_gnome_tools
+  echo "search-light@icedman.github.com" > "$SANDBOX/ext-installed"
+  local dir="$HOME/.local/share/gnome-shell/extensions/search-light@icedman.github.com"
+  mkdir -p "$dir"
+  echo '{"uuid": "search-light@icedman.github.com", "shell-version": ["44", "45"]}' > "$dir/metadata.json"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "uuid=search-light@icedman.github.com&shell_version=46"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "8" "search-light replaced"
+
+  : > "$STUB_LOG"
+  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
+  "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1
+  assert_contains "$SANDBOX/out" "search-light@icedman.github.com does not support GNOME Shell 46 yet, skipping it"
+}
+
+# An installed extension that supports this GNOME Shell is not downloaded again
+test_gnome_module_keeps_an_installed_extension_that_supports_this_gnome() {
+  stub_gnome_tools
+  echo "search-light@icedman.github.com" > "$SANDBOX/ext-installed"
+  local dir="$HOME/.local/share/gnome-shell/extensions/search-light@icedman.github.com"
+  mkdir -p "$dir"
+  echo '{"uuid": "search-light@icedman.github.com", "shell-version": ["45", "46"]}' > "$dir/metadata.json"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  assert_not_contains "$STUB_LOG" "uuid=search-light@icedman.github.com"
+}
+
+# Without Search Light, Super+Space opens GNOME's own app search
+test_gnome_module_puts_the_app_grid_on_super_space_without_search_light() {
+  stub_gnome_tools
+  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
+  "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1
+  assert_contains "$STUB_LOG" "gsettings set org.gnome.shell.keybindings toggle-application-view ['<Super>a', '<Super>space']"
+  assert_contains "$SANDBOX/out" "Super+Space opens the app grid"
+}
+
+# With Search Light back, the app grid gives Super+Space up again
+test_gnome_module_gives_super_space_back_to_search_light() {
+  stub_gnome_tools
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  assert_not_contains "$STUB_LOG" "toggle-application-view ['<Super>a', '<Super>space']"
+  assert_not_contains "$STUB_LOG" "gsettings reset org.gnome.shell.keybindings toggle-application-view"
+  echo "['<Super>a', '<Super>space']" > "$SANDBOX/app-view"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  assert_contains "$STUB_LOG" "gsettings reset org.gnome.shell.keybindings toggle-application-view"
 }
 
 # Without dash-to-dock, Ubuntu's own dock stays on (it reads the same dock settings)

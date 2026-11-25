@@ -209,10 +209,14 @@ Turn the services back on with `ducal cleanup restore-services`.
    LC_ALL=C gnome-extensions info search-light@icedman.github.com | grep -E "Enabled|State"
    ```
 
-   You want `Enabled: Yes` and `State: ACTIVE`. When extensions.gnome.org has no
-   build for your GNOME Shell, the installer warns
-   `search-light@icedman.github.com is not available for GNOME Shell <version>, skipping it`
-   and goes on without it.
+   You want `Enabled: Yes` and `State: ACTIVE`. `OUT OF DATE` means the installed
+   build does not support your GNOME Shell. Search Light supports GNOME up to 49,
+   so Ubuntu 26.04 (GNOME 50) and 26.10 (GNOME 51) cannot run it yet. The
+   installer then warns
+   `search-light@icedman.github.com does not support GNOME Shell <version> yet, skipping it`
+   and gives `Super+Space` to GNOME's own app grid, which also searches apps.
+   When Search Light supports your GNOME, run the installer again: it installs
+   the new build and gives `Super+Space` back to it.
 4. **In a virtual machine**, the host often keeps the `Super` key for itself. Capture
    the keyboard in the virtual machine (VirtualBox, VMware and GNOME Boxes each have a
    key or menu for it), or use `Ctrl+Space`.

@@ -40,6 +40,18 @@ log_ok "Extensions enabled (new ones load at your next login)"
 grep -vE '^\s*#' "$DUCAL_ROOT/config/gnome/settings.ini" | dconf load /
 log_ok "Desktop settings applied"
 
+# Super+Space belongs to Search Light; without it (no build for this GNOME yet),
+# GNOME's own app grid takes it, and gives it back once Search Light installs
+app_view=org.gnome.shell.keybindings
+if [[ " ${DUCAL_EXTENSIONS[*]} " == *" search-light@icedman.github.com "* ]]; then
+  if [[ $(gsettings get $app_view toggle-application-view) == *"<Super>space"* ]]; then
+    gsettings reset $app_view toggle-application-view
+  fi
+else
+  gsettings set $app_view toggle-application-view "['<Super>a', '<Super>space']"
+  log_ok "Super+Space opens the app grid (Search Light does not support this GNOME yet)"
+fi
+
 add_custom_keybinding ducal-search "Search the web" "$HOME/.local/bin/ducal search" "<Super>b"
 log_ok "Super+B opens a web search box"
 
