@@ -11,10 +11,10 @@ setup_sandbox() {
   SANDBOX=$(mktemp -d)
   export HOME="$SANDBOX/home" STUB_LOG="$SANDBOX/calls.log"
   unset XDG_CONFIG_HOME XDG_DATA_HOME DUCAL_CONFIG_DIR DUCAL_DATA_DIR DUCAL_ROOT
-  # the web search lock lives here: keep it away from the real session
+  # keep the runtime directory away from the real session
   export XDG_RUNTIME_DIR="$SANDBOX/run"
   mkdir -p "$HOME" "$SANDBOX/stubs" "$XDG_RUNTIME_DIR"
-  for cmd in gsettings dconf pkill gnome-extensions; do
+  for cmd in gsettings dconf pkill gnome-extensions systemctl; do
     printf '#!/usr/bin/env bash\necho "%s $*" >> "$STUB_LOG"\n' "$cmd" > "$SANDBOX/stubs/$cmd"
     chmod +x "$SANDBOX/stubs/$cmd"
   done
@@ -39,12 +39,6 @@ run_test() {
 }
 
 # ---------------------------------------------------------------- helpers
-test_hex_to_rgba_uses_dot_decimal_on_any_locale() {
-  local out
-  out=$(LC_ALL=es_ES.UTF-8 bash -c "source '$ROOT/lib/common.sh'; hex_to_rgba_tuple '#7aa2f7' 0.95")
-  assert_eq "$out" "(0.478, 0.635, 0.969, 0.95)"
-}
-
 test_link_file_backs_up_existing_file_and_is_idempotent() {
   source "$ROOT/lib/common.sh"
   echo src > "$SANDBOX/src"; echo old > "$HOME/dest"
@@ -88,7 +82,11 @@ test_theme_apply_switches_every_target() {
   assert_contains "$HOME/.config/Code/User/settings.json" '"editor.fontSize": 17'
   assert_contains "$HOME/.config/gtk-4.0/gtk.css" '/* user rules */'
   assert_eq "$(cat "$HOME/.config/ducal/current")" "gruvbox"
-  assert_contains "$STUB_LOG" "dconf write /org/gnome/shell/extensions/search-light/border-color (0.490, 0.682, 0.639, 1.0)"
+  local ul="$HOME/.config/ulauncher/user-themes/ducal"
+  assert_contains "$ul/theme.css" '@define-color bg_color #282828;'
+  assert_not_contains "$ul/theme.css" '{{'
+  assert_contains "$ul/manifest.json" '"name": "ducal"'
+  assert_contains "$HOME/.config/ulauncher/settings.json" '"theme-name": "ducal"'
   assert_contains "$STUB_LOG" "dconf write /org/gnome/shell/extensions/user-theme/name 'Ducal'"
   assert_contains "$HOME/.themes/Ducal/gnome-shell/gnome-shell.css" '#282828'
   assert_not_contains "$HOME/.themes/Ducal/gnome-shell/gnome-shell.css" '{{'
@@ -1033,7 +1031,7 @@ test_keys_shows_the_shortcut_guide() {
   out=$("$ROOT/bin/ducal" keys); local rc=$?
   assert_eq "$rc" "0"
   local k
-  for k in "Super+Q" "Super+Space" "Super+B" "Super+Shift+1" "Ctrl+Alt+L" "Ctrl+Alt+T" "Super+C" "Ctrl+Shift+Enter"; do
+  for k in "Super+Q" "Super+Space" "Super+Shift+1" "Ctrl+Alt+L" "Ctrl+Alt+T" "Super+C" "Ctrl+Shift+Enter"; do
     [[ $out == *"$k"* ]] || fail "guide misses $k"
   done
 }
@@ -1124,11 +1122,11 @@ test_gnome_module_installs_only_missing_extensions() {
   printf 'dash-to-dock@micxgx.gmail.com\nforge@jmmaranan.com\n' > "$SANDBOX/ext-installed"
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
-  assert_contains "$STUB_LOG" "uuid=search-light@icedman.github.com&shell_version=46"
+  assert_contains "$STUB_LOG" "uuid=space-bar@luchrioh&shell_version=46"
   assert_contains "$STUB_LOG" "uuid=blur-my-shell@aunetx&shell_version=46"
   assert_not_contains "$STUB_LOG" "uuid=forge@jmmaranan.com"
   assert_not_contains "$STUB_LOG" "uuid=dash-to-dock@micxgx.gmail.com"
-  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "6" "6 missing extensions"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "5" "5 missing extensions"
 }
 
 test_gnome_module_enables_ours_and_keeps_user_extensions() {
@@ -1138,7 +1136,7 @@ test_gnome_module_enables_ours_and_keeps_user_extensions() {
   local enabled disabled
   enabled=$(cat "$SANDBOX/enabled"); disabled=$(cat "$SANDBOX/disabled")
   [[ $enabled == *"'other@example.com'"* ]] || fail "user extension dropped: $enabled"
-  [[ $enabled == *"'forge@jmmaranan.com'"* && $enabled == *"'search-light@icedman.github.com'"* ]] || fail "missing ours: $enabled"
+  [[ $enabled == *"'forge@jmmaranan.com'"* && $enabled == *"'clipboard-indicator@tudmotu.com'"* ]] || fail "missing ours: $enabled"
   [[ $enabled != *ding@rastersoft.com* ]] || fail "ding should be disabled: $enabled"
   assert_eq "$(grep -o 'forge@jmmaranan.com' <<<"$enabled" | wc -l)" "1" "no duplicates after two runs"
   [[ $disabled == *"'ubuntu-dock@ubuntu.com'"* && $disabled == *"'ding@rastersoft.com'"* ]] || fail "disabled: $disabled"
@@ -1148,12 +1146,12 @@ test_gnome_module_enables_ours_and_keeps_user_extensions() {
 # A new GNOME often comes before every extension supports it: skip, do not stop
 test_gnome_module_skips_an_extension_without_a_build() {
   stub_gnome_tools
-  echo "search-light@icedman.github.com" > "$SANDBOX/unavailable"
+  echo "space-bar@luchrioh" > "$SANDBOX/unavailable"
   "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1; local rc=$?
   assert_eq "$rc" "0"
-  assert_contains "$SANDBOX/out" "search-light@icedman.github.com is not available for GNOME Shell 46, skipping it"
+  assert_contains "$SANDBOX/out" "space-bar@luchrioh is not available for GNOME Shell 46, skipping it"
   assert_contains "$SANDBOX/out" "Desktop settings applied"
-  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "7" "the other 7 extensions"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "6" "the other 6 extensions"
   [[ $(cat "$SANDBOX/enabled") != *search-light* ]] || fail "enabled: $(cat "$SANDBOX/enabled")"
 }
 
@@ -1161,11 +1159,11 @@ test_gnome_module_skips_an_extension_without_a_build() {
 # this GNOME Shell: GNOME then never loads it (Search Light on GNOME 50 and 51)
 test_gnome_module_skips_an_extension_built_for_an_older_gnome() {
   stub_gnome_tools
-  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
+  echo "space-bar@luchrioh" > "$SANDBOX/outdated"
   "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1; local rc=$?
   assert_eq "$rc" "0"
-  assert_contains "$SANDBOX/out" "search-light@icedman.github.com does not support GNOME Shell 46 yet, skipping it"
-  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "7" "the other 7 extensions"
+  assert_contains "$SANDBOX/out" "space-bar@luchrioh does not support GNOME Shell 46 yet, skipping it"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "6" "the other 6 extensions"
   [[ $(cat "$SANDBOX/enabled") != *search-light* ]] || fail "enabled: $(cat "$SANDBOX/enabled")"
 }
 
@@ -1173,37 +1171,36 @@ test_gnome_module_skips_an_extension_built_for_an_older_gnome() {
 # supports this GNOME Shell, skipped otherwise
 test_gnome_module_replaces_an_installed_extension_that_does_not_support_this_gnome() {
   stub_gnome_tools
-  echo "search-light@icedman.github.com" > "$SANDBOX/ext-installed"
-  local dir="$HOME/.local/share/gnome-shell/extensions/search-light@icedman.github.com"
+  echo "space-bar@luchrioh" > "$SANDBOX/ext-installed"
+  local dir="$HOME/.local/share/gnome-shell/extensions/space-bar@luchrioh"
   mkdir -p "$dir"
-  echo '{"uuid": "search-light@icedman.github.com", "shell-version": ["44", "45"]}' > "$dir/metadata.json"
+  echo '{"uuid": "space-bar@luchrioh", "shell-version": ["44", "45"]}' > "$dir/metadata.json"
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1; local rc=$?
   assert_eq "$rc" "0"
-  assert_contains "$STUB_LOG" "uuid=search-light@icedman.github.com&shell_version=46"
-  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "8" "search-light replaced"
+  assert_contains "$STUB_LOG" "uuid=space-bar@luchrioh&shell_version=46"
+  assert_eq "$(grep -c 'gnome-extensions install --force' "$STUB_LOG")" "7" "space-bar replaced"
 
   : > "$STUB_LOG"
-  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
+  echo "space-bar@luchrioh" > "$SANDBOX/outdated"
   "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1
-  assert_contains "$SANDBOX/out" "search-light@icedman.github.com does not support GNOME Shell 46 yet, skipping it"
+  assert_contains "$SANDBOX/out" "space-bar@luchrioh does not support GNOME Shell 46 yet, skipping it"
 }
 
 # An installed extension that supports this GNOME Shell is not downloaded again
 test_gnome_module_keeps_an_installed_extension_that_supports_this_gnome() {
   stub_gnome_tools
-  echo "search-light@icedman.github.com" > "$SANDBOX/ext-installed"
-  local dir="$HOME/.local/share/gnome-shell/extensions/search-light@icedman.github.com"
+  echo "space-bar@luchrioh" > "$SANDBOX/ext-installed"
+  local dir="$HOME/.local/share/gnome-shell/extensions/space-bar@luchrioh"
   mkdir -p "$dir"
-  echo '{"uuid": "search-light@icedman.github.com", "shell-version": ["45", "46"]}' > "$dir/metadata.json"
+  echo '{"uuid": "space-bar@luchrioh", "shell-version": ["45", "46"]}' > "$dir/metadata.json"
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1
-  assert_not_contains "$STUB_LOG" "uuid=search-light@icedman.github.com"
+  assert_not_contains "$STUB_LOG" "uuid=space-bar@luchrioh"
 }
 
-# Without Search Light, Super+Space opens Ulauncher: a search box that lists apps
-# as you type. It runs as its own app, so it does not depend on the GNOME version.
-test_gnome_module_puts_ulauncher_on_super_space_without_search_light() {
+# Super+Space opens Ulauncher everywhere: a search box that lists apps as you
+# type and searches the web. It replaces Search Light and the Super+B search box.
+test_gnome_module_puts_ulauncher_on_super_space() {
   stub_gnome_tools
-  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
   "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1; local rc=$?
   assert_eq "$rc" "0"
   assert_contains "$STUB_LOG" "ppa.launchpadcontent.net/agornostal/ulauncher/ubuntu"
@@ -1212,52 +1209,85 @@ test_gnome_module_puts_ulauncher_on_super_space_without_search_light() {
   assert_contains "$STUB_LOG" "dconf write ${key}command 'ulauncher-toggle'"
   assert_contains "$STUB_LOG" "dconf write ${key}binding '<Super>space'"
   assert_contains "$STUB_LOG" "systemctl --user enable ulauncher.service"
-  assert_contains "$HOME/.config/ulauncher/settings.json" '"theme-name": "dark"'
+  assert_contains "$HOME/.config/ulauncher/settings.json" '"show-indicator-icon": false'
   assert_contains "$SANDBOX/out" "Super+Space opens Ulauncher"
   assert_not_contains "$STUB_LOG" "toggle-application-view ['<Super>a', '<Super>space']"
+  assert_not_contains "$STUB_LOG" "uuid=search-light@icedman.github.com"
 }
 
-# A ulauncher settings file the user already has stays as it is
+# Ulauncher takes the colors of the current ducal theme
+test_gnome_module_themes_ulauncher_with_the_current_theme() {
+  stub_gnome_tools
+  mkdir -p "$HOME/.config/ducal"; echo gruvbox > "$HOME/.config/ducal/current"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  local ul="$HOME/.config/ulauncher/user-themes/ducal"
+  assert_contains "$ul/theme.css" '@define-color bg_color #282828;'
+  assert_contains "$ul/theme-gtk-3.20.css" '@import url("theme.css");'
+  assert_contains "$HOME/.config/ulauncher/settings.json" '"theme-name": "ducal"'
+}
+
+# Search Light is turned off on desktops that had it
+test_gnome_module_turns_search_light_off() {
+  stub_gnome_tools
+  echo "['search-light@icedman.github.com', 'other@example.com']" > "$SANDBOX/enabled"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  [[ $(cat "$SANDBOX/enabled") != *search-light* ]] || fail "enabled: $(cat "$SANDBOX/enabled")"
+  [[ $(cat "$SANDBOX/disabled") == *"'search-light@icedman.github.com'"* ]] || fail "disabled: $(cat "$SANDBOX/disabled")"
+  assert_not_contains "$SANDBOX/dconf-loaded" "search-light"
+}
+
+# A ulauncher settings file the user already has keeps every setting
 test_gnome_module_keeps_the_users_ulauncher_settings() {
   stub_gnome_tools
-  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
   mkdir -p "$HOME/.config/ulauncher"
-  echo '{"theme-name": "light"}' > "$HOME/.config/ulauncher/settings.json"
+  echo '{"render-on-screen": "default-monitor"}' > "$HOME/.config/ulauncher/settings.json"
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1
-  assert_eq "$(cat "$HOME/.config/ulauncher/settings.json")" '{"theme-name": "light"}'
+  assert_contains "$HOME/.config/ulauncher/settings.json" '"render-on-screen": "default-monitor"'
+  assert_not_contains "$HOME/.config/ulauncher/settings.json" 'show-indicator-icon'
 }
 
-# Without Search Light nor Ulauncher, Super+Space opens GNOME's own app grid
-test_gnome_module_puts_the_app_grid_on_super_space_without_any_launcher() {
+# Ulauncher web search shortcuts: g (Google, Ulauncher's own), yt and gh
+test_gnome_module_adds_youtube_and_github_shortcuts_to_ulauncher() {
   stub_gnome_tools
-  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  local f="$HOME/.config/ulauncher/shortcuts.json" keywords
+  keywords=$(python3 -c 'import json,sys; print(" ".join(sorted(r["keyword"] for r in json.load(open(sys.argv[1])).values())))' "$f")
+  assert_eq "$keywords" "g gh so wiki yt" "no duplicates after two runs"
+  assert_contains "$f" "https://www.youtube.com/results?search_query=%s"
+  assert_contains "$f" "https://github.com/search?q=%s"
+  assert_contains "$f" "https://google.com/search?q=%s"
+}
+
+# Shortcuts the user already has stay as they are; only missing keywords are added
+test_gnome_module_keeps_the_users_ulauncher_shortcuts() {
+  stub_gnome_tools
+  mkdir -p "$HOME/.config/ulauncher"
+  echo '{"a1": {"id": "a1", "name": "Mine", "keyword": "yt", "cmd": "https://example.com/%s", "icon": null, "is_default_search": false, "run_without_argument": false, "added": 1}}' > "$HOME/.config/ulauncher/shortcuts.json"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  local f="$HOME/.config/ulauncher/shortcuts.json"
+  assert_contains "$f" "https://example.com/%s"
+  assert_not_contains "$f" "youtube.com"
+  assert_contains "$f" "https://github.com/search?q=%s"
+  assert_not_contains "$f" "google.com"
+}
+
+# Without Ulauncher, Super+Space opens GNOME's own app grid
+test_gnome_module_puts_the_app_grid_on_super_space_without_ulauncher() {
+  stub_gnome_tools
   touch "$SANDBOX/no-ulauncher"
   "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1; local rc=$?
   assert_eq "$rc" "0"
   assert_contains "$STUB_LOG" "gsettings set org.gnome.shell.keybindings toggle-application-view ['<Super>a', '<Super>space']"
   assert_contains "$SANDBOX/out" "Super+Space opens the app grid"
+  assert_contains "$STUB_LOG" "dconf reset -f /org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/ducal-launcher/"
   # a repository without ulauncher is not left behind for apt
   assert_contains "$STUB_LOG" "sudo rm -f /etc/apt/sources.list.d/ulauncher.list"
 }
 
-# With Search Light back, Ulauncher gives Super+Space up and stops starting
-test_gnome_module_gives_super_space_back_to_search_light_from_ulauncher() {
+# Once Ulauncher installs, the app grid gives Super+Space up
+test_gnome_module_takes_super_space_from_the_app_grid() {
   stub_gnome_tools
-  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
-  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
-  rm "$SANDBOX/outdated"; : > "$STUB_LOG"
-  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
-  local key=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/ducal-launcher/
-  assert_contains "$STUB_LOG" "dconf write ${key}binding ''"
-  assert_contains "$STUB_LOG" "systemctl --user disable --now ulauncher.service"
-}
-
-# With Search Light back, the app grid gives Super+Space up again
-test_gnome_module_gives_super_space_back_to_search_light() {
-  stub_gnome_tools
-  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
-  assert_not_contains "$STUB_LOG" "toggle-application-view ['<Super>a', '<Super>space']"
-  assert_not_contains "$STUB_LOG" "gsettings reset org.gnome.shell.keybindings toggle-application-view"
   echo "['<Super>a', '<Super>space']" > "$SANDBOX/app-view"
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1
   assert_contains "$STUB_LOG" "gsettings reset org.gnome.shell.keybindings toggle-application-view"
@@ -1286,16 +1316,6 @@ test_gnome_module_makes_kitty_the_xdg_terminal_and_keeps_other_entries() {
   assert_eq "$rc" "0"
   assert_eq "$(cat "$HOME/.config/ubuntu-xdg-terminals.list")" "$(printf 'kitty.desktop\norg.gnome.Ptyxis.desktop:new-window')"
   assert_contains "$STUB_LOG" "gsettings set org.gnome.desktop.default-applications.terminal exec $HOME/.local/bin/kitty"
-}
-
-# Search Light joins each shortcut list into ONE accelerator: two entries in one
-# key became the invalid "<Super>space<Control>space" (only Ctrl+Super+Space worked)
-test_gnome_module_gives_search_light_one_shortcut_per_key() {
-  stub_gnome_tools
-  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
-  assert_contains "$SANDBOX/dconf-loaded" "shortcut-search=['<Super>space']"
-  assert_contains "$SANDBOX/dconf-loaded" "secondary-shortcut-search=['<Control>space']"
-  assert_not_contains "$SANDBOX/dconf-loaded" "shortcut-search=['<Super>space', '<Control>space']"
 }
 
 # Clipboard history: Clipboard Indicator, 50 items with images, on Super+Shift+V
@@ -1792,74 +1812,12 @@ test_wallpaper_rejects_missing_and_non_image_files() {
   assert_not_contains "$STUB_LOG" "picture-uri"
 }
 
-# ---------------------------------------------------------------- search
-# zenity answers with $SANDBOX/typed (or cancels when the file is missing)
-stub_search_tools() {
-  local s="$SANDBOX/stubs"
-  printf '#!/usr/bin/env bash\necho "xdg-open $*" >> "$STUB_LOG"\n' > "$s/xdg-open"
-  printf '#!/usr/bin/env bash\necho "zenity $*" >> "$STUB_LOG"\n[[ -f "%s/typed" ]] || exit 1\ncat "%s/typed"\n' "$SANDBOX" "$SANDBOX" > "$s/zenity"
-  chmod +x "$s/xdg-open" "$s/zenity"
-}
-
-test_search_opens_the_browser_with_the_query() {
-  stub_search_tools
-  "$ROOT/bin/ducal" search "tokyo night & gruvbox" >/dev/null 2>&1; local rc=$?
-  assert_eq "$rc" "0"
-  assert_contains "$STUB_LOG" "xdg-open https://www.google.com/search?q=tokyo+night+%26+gruvbox"
-}
-
-test_search_opens_addresses_directly() {
-  stub_search_tools
-  "$ROOT/bin/ducal" search "github.com/yusney/ducal" >/dev/null 2>&1
-  "$ROOT/bin/ducal" search "http://localhost:3000" >/dev/null 2>&1
-  assert_contains "$STUB_LOG" "xdg-open https://github.com/yusney/ducal"
-  assert_contains "$STUB_LOG" "xdg-open http://localhost:3000"
-}
-
-test_search_without_query_asks_in_a_dialog() {
-  stub_search_tools
-  echo "neovim lazyvim" > "$SANDBOX/typed"
-  "$ROOT/bin/ducal" search >/dev/null 2>&1
-  assert_contains "$STUB_LOG" "xdg-open https://www.google.com/search?q=neovim+lazyvim"
-}
-
-test_search_dialog_cancel_or_empty_opens_nothing() {
-  stub_search_tools
-  "$ROOT/bin/ducal" search >/dev/null 2>&1; local rc=$?
-  assert_eq "$rc" "0"
-  echo "   " > "$SANDBOX/typed"
-  "$ROOT/bin/ducal" search >/dev/null 2>&1
-  assert_not_contains "$STUB_LOG" "xdg-open"
-}
-
-test_search_dialog_opens_only_once() {
-  stub_search_tools
-  echo "neovim" > "$SANDBOX/typed"
-  local run="$SANDBOX/run"
-  mkdir -p "$run"
-  # an open dialog holds the lock, as a second Super+B press would find it
-  exec 8>"$run/ducal-search.lock"
-  flock -n 8 || fail "could not take the lock"
-  XDG_RUNTIME_DIR=$run "$ROOT/bin/ducal" search >/dev/null 2>&1; local rc=$?
-  exec 8>&-
-  assert_eq "$rc" "0"
-  assert_not_contains "$STUB_LOG" "zenity"
-  assert_not_contains "$STUB_LOG" "xdg-open"
-  # once the dialog is closed, Super+B opens it again
-  XDG_RUNTIME_DIR=$run "$ROOT/bin/ducal" search >/dev/null 2>&1
-  assert_contains "$STUB_LOG" "xdg-open https://www.google.com/search?q=neovim"
-}
-
-test_search_uses_a_custom_engine() {
-  stub_search_tools
-  mkdir -p "$HOME/.config/ducal"
-  echo "https://duckduckgo.com/?q=%s" > "$HOME/.config/ducal/search-url"
-  "$ROOT/bin/ducal" search "ubuntu" >/dev/null 2>&1
-  assert_contains "$STUB_LOG" "xdg-open https://duckduckgo.com/?q=ubuntu"
-}
-
-test_gnome_module_adds_the_search_shortcut_once() {
+# ---------------------------------------------------------------- launcher
+# Super+B (the old web search box) goes away: Ulauncher's g, yt and gh replace it.
+# The user's own custom shortcuts stay, and the launcher shortcut is added once.
+test_gnome_module_replaces_the_search_shortcut_with_the_launcher() {
   stub_gnome_tools
+  local base=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings
   cat > "$SANDBOX/stubs/gsettings" <<EOF
 #!/usr/bin/env bash
 echo "gsettings \$*" >> "\$STUB_LOG"
@@ -1874,13 +1832,21 @@ esac
 exit 0
 EOF
   chmod +x "$SANDBOX/stubs/gsettings"
-  echo "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']" > "$SANDBOX/custom"
+  echo "['$base/custom0/', '$base/ducal-search/']" > "$SANDBOX/custom"
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1
   "$ROOT/install.sh" --only gnome >/dev/null 2>&1
-  local p=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/ducal-search/
-  assert_eq "$(cat "$SANDBOX/custom")" "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '$p']"
-  assert_contains "$STUB_LOG" "dconf write ${p}binding '<Super>b'"
-  assert_contains "$STUB_LOG" "dconf write ${p}command '$HOME/.local/bin/ducal search'"
+  assert_eq "$(cat "$SANDBOX/custom")" "['$base/custom0/', '$base/ducal-launcher/']"
+  assert_contains "$STUB_LOG" "dconf reset -f $base/ducal-search/"
+  assert_not_contains "$STUB_LOG" "dconf write $base/ducal-search/"
+  assert_contains "$STUB_LOG" "dconf write $base/ducal-launcher/binding '<Super>space'"
+}
+
+test_ducal_search_is_gone() {
+  "$ROOT/bin/ducal" search pizza >/dev/null 2>&1; local rc=$?
+  [[ $rc -ne 0 ]] || fail "ducal search still runs"
+  "$ROOT/bin/ducal" help > "$SANDBOX/out" 2>&1
+  assert_not_contains "$SANDBOX/out" "search"
+  assert_contains "$SANDBOX/out" "ducal help"
 }
 
 # ---------------------------------------------------------------- run

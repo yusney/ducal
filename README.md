@@ -14,7 +14,7 @@ use every day. Switch the whole desktop to another palette with a single command
 | Area | Setup |
 | --- | --- |
 | Desktop | GNOME with matching GTK and shell themes, Tela icons, Vimix cursors, tiling via Forge, hidden dock, slim top bar with numbered workspaces |
-| Launcher | Search Light on `Super+Space` (Ulauncher on GNOME versions Search Light does not support yet) |
+| Launcher | [Ulauncher](https://ulauncher.io) on `Super+Space`, in the theme colors, with web search |
 | Clipboard | History of the last 50 copies, text and images, on `Super+Shift+V` (Clipboard Indicator) |
 | Terminal | kitty + fish + Starship, JetBrainsMono Nerd Font |
 | Editor | Neovim with LazyVim, VS Code themed to match |
@@ -190,40 +190,17 @@ Turn the services back on with `ducal cleanup restore-services`.
 
 ### `Super+Space` does not open the launcher
 
-1. **Only `Ctrl+Super+Space` works?** Installs before this fix gave Search Light both
-   shortcuts in one setting, which it joins into one invalid shortcut. Run the
-   installer again, or fix it by hand:
-
-   ```bash
-   dconf write /org/gnome/shell/extensions/search-light/shortcut-search "['<Super>space']"
-   dconf write /org/gnome/shell/extensions/search-light/secondary-shortcut-search "['<Control>space']"
-   ```
-
-   GNOME Shell logs `Unable to grab accelerator` when a shortcut is not valid:
-   `journalctl --user -b | grep -i accelerator`.
-2. **Log out and back in** after the install. New GNOME extensions only load in a
-   new session; on Ubuntu 25.10 and newer (Wayland only) there is no other way.
-3. **Check that the extension is running**:
-
-   ```bash
-   LC_ALL=C gnome-extensions info search-light@icedman.github.com | grep -E "Enabled|State"
-   ```
-
-   You want `Enabled: Yes` and `State: ACTIVE`. `OUT OF DATE` means the installed
-   build does not support your GNOME Shell. Search Light supports GNOME up to 49,
-   so Ubuntu 26.04 (GNOME 50) and 26.10 (GNOME 51) cannot run it yet. The
-   installer then warns
-   `search-light@icedman.github.com does not support GNOME Shell <version> yet, skipping it`
-   and installs [Ulauncher](https://ulauncher.io) instead: `Super+Space` opens its
-   search box, which lists apps as you type. Ulauncher is a separate app, so it
-   works on any GNOME version; it comes from its PPA (`ppa:agornostal/ulauncher`)
-   and starts at every login. If Ulauncher cannot install either, `Super+Space`
-   opens GNOME's own app grid. When Search Light supports your GNOME, run the
-   installer again: it installs the new build, gives `Super+Space` back to it and
-   stops starting Ulauncher.
+1. **Check that Ulauncher is running**: `systemctl --user status ulauncher`. Start
+   it with `systemctl --user enable --now ulauncher`. If the installer warned
+   `Super+Space opens the app grid (Ulauncher could not be installed)`, run it
+   again once its PPA (`ppa:agornostal/ulauncher`) is reachable.
+2. **Check the shortcut**: Settings → Keyboard → Custom Shortcuts should list
+   `Launcher` on `Super+Space` running `ulauncher-toggle`.
+3. **Desktops installed before Ulauncher** had Search Light on `Super+Space`. Run
+   the installer again: it turns Search Light off and sets up Ulauncher.
 4. **In a virtual machine**, the host often keeps the `Super` key for itself. Capture
    the keyboard in the virtual machine (VirtualBox, VMware and GNOME Boxes each have a
-   key or menu for it), or use `Ctrl+Space`.
+   key or menu for it).
 
 ### No themed login screen or boot splash
 
@@ -252,7 +229,6 @@ ducal theme gruvbox        # switch the whole desktop to Gruvbox
 ducal theme tokyo-night    # back to Tokyo Night
 ducal wallpaper ~/me.png   # your own wallpaper, kept across theme switches
 ducal wallpaper reset      # back to the theme's generated wallpaper
-ducal search tokyo night   # web search in the default browser (Super+B opens a search box)
 ducal system restore       # back to the distribution login screen and boot splash
 ducal cleanup restore-services   # enable the services the cleanup disabled
 ```
@@ -268,8 +244,7 @@ The essentials. See the [full guide](docs/keybindings.md), or run `ducal keys`.
 
 | Shortcut | Action |
 | --- | --- |
-| `Super+Space` | Launcher (`Ctrl+Space` also works) |
-| `Super+B` | Search the web (or open an address) in your default browser |
+| `Super+Space` | Launcher: apps, and web search with `g`, `yt` or `gh` |
 | `Super+Shift+V` | Clipboard history (text and images) |
 | `Ctrl+Alt+T` | Terminal (kitty) |
 | `Super+Q` | Close the window (`Alt+F4` also works) |
@@ -285,16 +260,24 @@ ducal moves the lock screen to `Ctrl+Alt+L` and frees `Super+H` because Forge us
 desktop icons, which clash with this setup. There are four fixed workspaces, shown
 as numbers in the top bar (Space Bar extension) with the active one highlighted.
 
-## Web search
+## Launcher and web search
 
-`Super+B` opens a small search box. Press Enter to search in your default browser;
-type an address such as `github.com` or `localhost:3000` to open it directly.
-Google is the default engine. Use another one by writing its URL, with `%s` where
-the query goes, to `~/.config/ducal/search-url`:
+`Super+Space` opens [Ulauncher](https://ulauncher.io): type to find an app. It also
+searches the web: type a keyword, a space and your query, then Enter.
 
-```bash
-echo 'https://duckduckgo.com/?q=%s' > ~/.config/ducal/search-url
-```
+| Keyword | Searches |
+| --- | --- |
+| `g` | Google (`g pizza`) |
+| `yt` | YouTube (`yt lofi`) |
+| `gh` | GitHub (`gh ducal`) |
+| `so` | Stack Overflow (`so bash arrays`) |
+| `wiki` | Wikipedia (`wiki Rome`) |
+
+Ulauncher is a separate app, so it works on every GNOME version. It comes from its
+PPA (`ppa:agornostal/ulauncher`), starts at every login and follows the ducal theme
+colors (`ducal theme` updates them). Add or change keywords in its preferences
+(the gear in the search box): ducal adds `yt` and `gh` and keeps every shortcut
+you set up there.
 
 ## Project layout
 
@@ -353,7 +336,7 @@ ducal stands on the shoulders of these projects:
 - [tokyo-night.yazi](https://github.com/BennyOe/tokyo-night.yazi) and [gruvbox-dark.yazi](https://github.com/bennyyip/gruvbox-dark.yazi) flavors
 - [gruvbox.nvim](https://github.com/ellisonleao/gruvbox.nvim) by ellisonleao (MIT)
 - [Starship](https://starship.rs) presets (ISC)
-- [Forge](https://github.com/forge-ext/forge), [Search Light](https://github.com/icedman/search-light), [Space Bar](https://github.com/christopher-l/space-bar) and other GNOME extensions by their authors
+- [Forge](https://github.com/forge-ext/forge), [Ulauncher](https://ulauncher.io), [Space Bar](https://github.com/christopher-l/space-bar) and other GNOME extensions by their authors
 
 Third-party themes are downloaded at install time and are not
 redistributed in this repository.

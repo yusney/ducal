@@ -4,7 +4,6 @@
 #   ducal theme <name>              switch the whole desktop to a theme
 #   ducal wallpaper <image>         use your own wallpaper with every theme
 #   ducal wallpaper reset           go back to each theme's wallpaper
-#   ducal search [text]             search the web or open an address (Super+B)
 #   ducal keys                      show every keyboard shortcut
 #   ducal system restore            restore the distribution login screen and boot splash
 #   ducal cleanup restore-services  enable the services the cleanup disabled
@@ -25,7 +24,7 @@ FALLBACK_GTK="Tokyonight-Dark"
 notes=()
 note() { notes+=("$1"); }
 
-usage() { sed -n '2,11p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,10p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
 
 # A GNOME session to theme: not on WSL or a server (DUCAL_NO_GNOME=1 forces it off)
 has_gnome() { [[ -z ${DUCAL_NO_GNOME:-} ]] && ! is_wsl && has_cmd gsettings && has_cmd dconf; }
@@ -87,11 +86,9 @@ apply_vscode() {
 }
 
 apply_launcher() {
-  local p=/org/gnome/shell/extensions/search-light
-  dconf write $p/background-color "$(hex_to_rgba_tuple "$BG" 0.95)"
-  dconf write $p/text-color "$(hex_to_rgba_tuple "$FG")"
-  dconf write $p/entry-text-color "$(hex_to_rgba_tuple "$FG")"
-  dconf write $p/border-color "$(hex_to_rgba_tuple "$ACCENT")"
+  # shellcheck source=../lib/launcher.sh
+  source "$DUCAL_ROOT/lib/launcher.sh"
+  ulauncher_apply_theme
 }
 
 apply_gtk() {
@@ -210,36 +207,6 @@ cmd_theme() {
   for n in "${notes[@]}"; do log_warn "$n"; done
 }
 
-# search_target TEXT — the URL to open: addresses as they are, anything else as
-# a web search with the engine in ~/.config/ducal/search-url (%s = the query).
-search_target() {
-  local text=$1 engine encoded
-  if [[ $text =~ ^https?:// ]]; then
-    echo "$text"
-  elif [[ $text =~ ^localhost(:[0-9]+)?(/.*)?$ ]]; then
-    echo "http://$text"
-  elif [[ $text != *" "* && $text =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}(:[0-9]+)?(/.*)?$ ]]; then
-    echo "https://$text"
-  else
-    engine=$(cat "$DUCAL_CONFIG_DIR/search-url" 2>/dev/null || echo 'https://www.google.com/search?q=%s')
-    encoded=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote_plus(sys.argv[1]))' "$text")
-    echo "${engine//%s/$encoded}"
-  fi
-}
-
-# ducal search [TEXT] — without TEXT, asks for it in a small dialog (Super+B).
-cmd_search() {
-  local text="$*"
-  if [[ -z $text ]]; then
-    # one dialog at a time: pressing Super+B again while it is open does nothing
-    local lock="${XDG_RUNTIME_DIR:-/tmp}/ducal-search.lock"
-    text=$(flock -n "$lock" zenity --entry --title="Search the web" --text="Search or type an address" --width=520 2>/dev/null) || return 0
-  fi
-  text=$(sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$text")
-  [[ -n $text ]] || return 0
-  xdg-open "$(search_target "$text")" >/dev/null 2>&1
-}
-
 # ducal keys — the shortcut guide, without Markdown table syntax.
 cmd_keys() {
   sed -E -e '/^\| *(---|Shortcut) /d' -e 's/^\| *//; s/ *\|$//; s/ *\| */  →  /' -e 's/`//g' \
@@ -277,7 +244,6 @@ cmd_cleanup() {
 case ${1:-help} in
   theme) shift; cmd_theme "$@" ;;
   wallpaper) shift; cmd_wallpaper "$@" ;;
-  search) shift; cmd_search "$@" ;;
   keys) cmd_keys ;;
   cleanup) shift; cmd_cleanup "$@" ;;
   system) shift; cmd_system "$@" ;;

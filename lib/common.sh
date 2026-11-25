@@ -48,15 +48,6 @@ seed_file() {
   cp "$src" "$dest"
 }
 
-# hex_to_rgba_tuple "#7aa2f7" [alpha] -> "(0.478, 0.635, 0.969, 1.0)"
-# LC_ALL=C forces "." as the decimal separator on any system locale.
-hex_to_rgba_tuple() {
-  local hex=${1#\#} alpha=${2:-1.0}
-  [[ $hex =~ ^[0-9a-fA-F]{6}$ ]] || die "Invalid hex color: $1"
-  LC_ALL=C awk -v r=$((16#${hex:0:2})) -v g=$((16#${hex:2:2})) -v b=$((16#${hex:4:2})) -v a="$alpha" \
-    'BEGIN { printf "(%.3f, %.3f, %.3f, %s)", r/255, g/255, b/255, a }'
-}
-
 # render_template FILE — prints FILE with {{VAR}} placeholders replaced by the
 # palette variables loaded from a theme's palette.env.
 render_template() {
