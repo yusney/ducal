@@ -6,7 +6,6 @@ DUCAL_EXTENSIONS=(
   blur-my-shell@aunetx                                 # blur behind the dock
   dash-to-dock@micxgx.gmail.com                        # auto-hiding dock
   just-perfection-desktop@just-perfection              # slim top bar
-  search-light@icedman.github.com                      # launcher on Super+Space
   forge@jmmaranan.com                                  # tiling windows
   space-bar@luchrioh                                   # numbered workspaces in the top bar
   clipboard-indicator@tudmotu.com                      # clipboard history (Super+Shift+V)
@@ -17,6 +16,7 @@ DUCAL_CONFLICTING_EXTENSIONS=(
   ubuntu-dock@ubuntu.com      # replaced by dash-to-dock
   tiling-assistant@ubuntu.com # clashes with Forge
   ding@rastersoft.com         # desktop icons
+  search-light@icedman.github.com # replaced by Ulauncher (Super+Space)
 )
 
 shell_major_version() { gnome-shell --version | awk '{print $3}' | cut -d. -f1; }
@@ -78,12 +78,23 @@ print(info["download_url"])
   rm -rf "$tmp"
 }
 
-# disable_custom_keybinding ID — clears the shortcut of a custom keybinding that
-# ducal added, keeping the entry so the user can see it in Settings
-disable_custom_keybinding() {
-  local path="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/$1/"
-  [[ -n $(dconf read "${path}command") ]] || return 0
-  dconf write "${path}binding" "''"
+# remove_custom_keybinding ID — takes a custom keybinding that ducal added out of
+# the list and forgets its settings; the user's own shortcuts stay
+remove_custom_keybinding() {
+  local path="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/$1/" list
+  list=$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
+  if [[ $list == *"'$path'"* ]]; then
+    list=$(python3 - "$list" "$path" <<'EOF'
+import ast, sys
+value, path = sys.argv[1].strip(), sys.argv[2]
+if value.startswith("@as "):
+    value = value[4:]
+print(str([p for p in ast.literal_eval(value) if p != path]))
+EOF
+    )
+    gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$list"
+  fi
+  dconf reset -f "$path"
 }
 
 # add_custom_keybinding ID NAME COMMAND BINDING — a GNOME custom shortcut,

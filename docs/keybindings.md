@@ -6,8 +6,7 @@
 
 | Shortcut | Action |
 | --- | --- |
-| `Super+Space` | Open the launcher (apps, files, settings); `Ctrl+Space` also works. On a GNOME that Search Light does not support yet (50 and newer), it opens Ulauncher instead |
-| `Super+B` | Search the web, or open an address, in the default browser |
+| `Super+Space` | Open the launcher (Ulauncher): type to find an app, or `g`, `yt` or `gh`, a space and a query to search Google, YouTube or GitHub |
 | `Super+Shift+V` | Clipboard history: the last 50 copies, text and images (`Super+V` is Forge's vertical split) |
 | `Ctrl+Alt+T` | Open a terminal (kitty) |
 | `Super+Q` | Close the focused window (`Alt+F4` also works) |
