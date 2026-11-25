@@ -394,6 +394,36 @@ test_boot_updates_an_existing_copy() {
   assert_eq "$(grep -c '^install' "$STUB_LOG")" "2"
 }
 
+# ~/.local/share/ducal is also where ducal keeps its wallpapers and downloads: on a
+# desktop installed from another copy it exists without the repository
+test_boot_downloads_into_a_folder_with_ducal_files_and_keeps_them() {
+  fake_ducal_repo "$SANDBOX/repo"
+  local dir="$HOME/.local/share/ducal"
+  mkdir -p "$dir/wallpapers" && echo svg > "$dir/wallpapers/ducal-gruvbox.svg"
+  DUCAL_REPO="$SANDBOX/repo" bash -s -- --only gnome < "$ROOT/boot.sh" >"$SANDBOX/out" 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  [[ -x $dir/install.sh ]] || fail "ducal not downloaded: $(cat "$SANDBOX/out")"
+  assert_eq "$(cat "$dir/wallpapers/ducal-gruvbox.svg")" "svg"
+  assert_contains "$STUB_LOG" "install --only gnome"
+  # later runs update it like any other copy
+  echo new > "$SANDBOX/repo/NEW" && git -C "$SANDBOX/repo" add NEW && git -C "$SANDBOX/repo" -c user.name=t -c user.email=t@t commit -qm new
+  DUCAL_REPO="$SANDBOX/repo" bash < "$ROOT/boot.sh" >/dev/null 2>&1
+  [[ -f $dir/NEW ]] || fail "not updated on the next run"
+}
+
+# A file in the way of the repository stops the download, untouched, with no
+# half-made repository left behind for the next run
+test_boot_stops_when_a_file_is_in_the_way_and_leaves_it() {
+  fake_ducal_repo "$SANDBOX/repo"
+  local dir="$HOME/.local/share/ducal"
+  mkdir -p "$dir" && echo mine > "$dir/install.sh"
+  DUCAL_REPO="$SANDBOX/repo" bash < "$ROOT/boot.sh" >"$SANDBOX/out" 2>&1; local rc=$?
+  [[ $rc -ne 0 ]] || fail "should fail"
+  assert_eq "$(cat "$dir/install.sh")" "mine"
+  [[ ! -e $dir/.git ]] || fail "half-made repository left behind"
+  assert_contains "$SANDBOX/out" "Could not download ducal into $dir"
+}
+
 test_boot_reports_the_installer_failure() {
   fake_ducal_repo "$SANDBOX/repo"
   printf '#!/usr/bin/env bash\nexit 3\n' > "$SANDBOX/repo/install.sh"
