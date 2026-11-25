@@ -14,7 +14,7 @@ use every day. Switch the whole desktop to another palette with a single command
 | Area | Setup |
 | --- | --- |
 | Desktop | GNOME with matching GTK and shell themes, Tela icons, Vimix cursors, tiling via Forge, hidden dock, slim top bar with numbered workspaces |
-| Launcher | Search Light on `Super+Space` |
+| Launcher | Search Light on `Super+Space` (Ulauncher on GNOME versions Search Light does not support yet) |
 | Clipboard | History of the last 50 copies, text and images, on `Super+Shift+V` (Clipboard Indicator) |
 | Terminal | kitty + fish + Starship, JetBrainsMono Nerd Font |
 | Editor | Neovim with LazyVim, VS Code themed to match |
@@ -214,9 +214,13 @@ Turn the services back on with `ducal cleanup restore-services`.
    so Ubuntu 26.04 (GNOME 50) and 26.10 (GNOME 51) cannot run it yet. The
    installer then warns
    `search-light@icedman.github.com does not support GNOME Shell <version> yet, skipping it`
-   and gives `Super+Space` to GNOME's own app grid, which also searches apps.
-   When Search Light supports your GNOME, run the installer again: it installs
-   the new build and gives `Super+Space` back to it.
+   and installs [Ulauncher](https://ulauncher.io) instead: `Super+Space` opens its
+   search box, which lists apps as you type. Ulauncher is a separate app, so it
+   works on any GNOME version; it comes from its PPA (`ppa:agornostal/ulauncher`)
+   and starts at every login. If Ulauncher cannot install either, `Super+Space`
+   opens GNOME's own app grid. When Search Light supports your GNOME, run the
+   installer again: it installs the new build, gives `Super+Space` back to it and
+   stops starting Ulauncher.
 4. **In a virtual machine**, the host often keeps the `Super` key for itself. Capture
    the keyboard in the virtual machine (VirtualBox, VMware and GNOME Boxes each have a
    key or menu for it), or use `Ctrl+Space`.
