@@ -78,6 +78,14 @@ print(info["download_url"])
   rm -rf "$tmp"
 }
 
+# disable_custom_keybinding ID — clears the shortcut of a custom keybinding that
+# ducal added, keeping the entry so the user can see it in Settings
+disable_custom_keybinding() {
+  local path="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/$1/"
+  [[ -n $(dconf read "${path}command") ]] || return 0
+  dconf write "${path}binding" "''"
+}
+
 # add_custom_keybinding ID NAME COMMAND BINDING — a GNOME custom shortcut,
 # added once and kept next to the user's own custom shortcuts.
 add_custom_keybinding() {

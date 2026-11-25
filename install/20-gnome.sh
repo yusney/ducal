@@ -40,14 +40,27 @@ log_ok "Extensions enabled (new ones load at your next login)"
 grep -vE '^\s*#' "$DUCAL_ROOT/config/gnome/settings.ini" | dconf load /
 log_ok "Desktop settings applied"
 
-# Super+Space belongs to Search Light; without it (no build for this GNOME yet),
-# GNOME's own app grid takes it, and gives it back once Search Light installs
+# Super+Space belongs to Search Light. Without it (no build for this GNOME yet),
+# Ulauncher takes it, or GNOME's own app grid when Ulauncher cannot install.
+# Search Light gets it back once it installs.
+# shellcheck source=../lib/apps.sh
+source "$DUCAL_ROOT/lib/apps.sh"
 app_view=org.gnome.shell.keybindings
-if [[ " ${DUCAL_EXTENSIONS[*]} " == *" search-light@icedman.github.com "* ]]; then
+app_view_off() {
   if [[ $(gsettings get $app_view toggle-application-view) == *"<Super>space"* ]]; then
     gsettings reset $app_view toggle-application-view
   fi
+}
+if [[ " ${DUCAL_EXTENSIONS[*]} " == *" search-light@icedman.github.com "* ]]; then
+  app_view_off
+  disable_custom_keybinding ducal-launcher
+  if has_cmd ulauncher; then systemctl --user disable --now ulauncher.service 2>/dev/null || true; fi
+elif install_ulauncher; then
+  app_view_off
+  add_custom_keybinding ducal-launcher "Launcher" "ulauncher-toggle" "<Super>space"
+  log_ok "Super+Space opens Ulauncher (Search Light does not support this GNOME yet)"
 else
+  disable_custom_keybinding ducal-launcher
   gsettings set $app_view toggle-application-view "['<Super>a', '<Super>space']"
   log_ok "Super+Space opens the app grid (Search Light does not support this GNOME yet)"
 fi

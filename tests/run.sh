@@ -1094,8 +1094,28 @@ EOF
 #!/usr/bin/env bash
 echo "dconf \$*" >> "\$STUB_LOG"
 [[ \$1 == load ]] && cat > "$SANDBOX/dconf-loaded"
+mkdir -p "$SANDBOX/dconf-db"
+[[ \$1 == write ]] && echo "\$3" > "$SANDBOX/dconf-db/\${2//\//_}"
+[[ \$1 == read ]] && cat "$SANDBOX/dconf-db/\${2//\//_}" 2>/dev/null
 exit 0
 EOF
+  # Package tools for Ulauncher: sudo only logs, except that installing ulauncher
+  # puts a ulauncher command on the PATH; apt has no ulauncher when
+  # $SANDBOX/no-ulauncher exists
+  cat > "$s/sudo" <<EOF
+#!/usr/bin/env bash
+echo "sudo \$*" >> "\$STUB_LOG"
+if [[ \$* == *"install"*ulauncher* && ! -f "$SANDBOX/no-ulauncher" ]]; then
+  printf '#!/usr/bin/env bash\\nexit 0\\n' > "$s/ulauncher"; chmod +x "$s/ulauncher"
+fi
+exit 0
+EOF
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$s/dpkg-query"
+  cat > "$s/apt-cache" <<EOF
+#!/usr/bin/env bash
+[[ -f "$SANDBOX/no-ulauncher" ]] && echo "  Candidate: (none)" || echo "  Candidate: 1.0"
+EOF
+  printf '#!/usr/bin/env bash\necho "systemctl $*" >> "$STUB_LOG"\n' > "$s/systemctl"
   chmod +x "$s"/*
 }
 
@@ -1179,13 +1199,57 @@ test_gnome_module_keeps_an_installed_extension_that_supports_this_gnome() {
   assert_not_contains "$STUB_LOG" "uuid=search-light@icedman.github.com"
 }
 
-# Without Search Light, Super+Space opens GNOME's own app search
-test_gnome_module_puts_the_app_grid_on_super_space_without_search_light() {
+# Without Search Light, Super+Space opens Ulauncher: a search box that lists apps
+# as you type. It runs as its own app, so it does not depend on the GNOME version.
+test_gnome_module_puts_ulauncher_on_super_space_without_search_light() {
   stub_gnome_tools
   echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
-  "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1
+  "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1; local rc=$?
+  assert_eq "$rc" "0"
+  assert_contains "$STUB_LOG" "ppa.launchpadcontent.net/agornostal/ulauncher/ubuntu"
+  assert_contains "$STUB_LOG" "apt-get install -y ulauncher"
+  local key=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/ducal-launcher/
+  assert_contains "$STUB_LOG" "dconf write ${key}command 'ulauncher-toggle'"
+  assert_contains "$STUB_LOG" "dconf write ${key}binding '<Super>space'"
+  assert_contains "$STUB_LOG" "systemctl --user enable ulauncher.service"
+  assert_contains "$HOME/.config/ulauncher/settings.json" '"theme-name": "dark"'
+  assert_contains "$SANDBOX/out" "Super+Space opens Ulauncher"
+  assert_not_contains "$STUB_LOG" "toggle-application-view ['<Super>a', '<Super>space']"
+}
+
+# A ulauncher settings file the user already has stays as it is
+test_gnome_module_keeps_the_users_ulauncher_settings() {
+  stub_gnome_tools
+  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
+  mkdir -p "$HOME/.config/ulauncher"
+  echo '{"theme-name": "light"}' > "$HOME/.config/ulauncher/settings.json"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  assert_eq "$(cat "$HOME/.config/ulauncher/settings.json")" '{"theme-name": "light"}'
+}
+
+# Without Search Light nor Ulauncher, Super+Space opens GNOME's own app grid
+test_gnome_module_puts_the_app_grid_on_super_space_without_any_launcher() {
+  stub_gnome_tools
+  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
+  touch "$SANDBOX/no-ulauncher"
+  "$ROOT/install.sh" --only gnome >"$SANDBOX/out" 2>&1; local rc=$?
+  assert_eq "$rc" "0"
   assert_contains "$STUB_LOG" "gsettings set org.gnome.shell.keybindings toggle-application-view ['<Super>a', '<Super>space']"
   assert_contains "$SANDBOX/out" "Super+Space opens the app grid"
+  # a repository without ulauncher is not left behind for apt
+  assert_contains "$STUB_LOG" "sudo rm -f /etc/apt/sources.list.d/ulauncher.list"
+}
+
+# With Search Light back, Ulauncher gives Super+Space up and stops starting
+test_gnome_module_gives_super_space_back_to_search_light_from_ulauncher() {
+  stub_gnome_tools
+  echo "search-light@icedman.github.com" > "$SANDBOX/outdated"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  rm "$SANDBOX/outdated"; : > "$STUB_LOG"
+  "$ROOT/install.sh" --only gnome >/dev/null 2>&1
+  local key=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/ducal-launcher/
+  assert_contains "$STUB_LOG" "dconf write ${key}binding ''"
+  assert_contains "$STUB_LOG" "systemctl --user disable --now ulauncher.service"
 }
 
 # With Search Light back, the app grid gives Super+Space up again

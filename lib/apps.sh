@@ -265,17 +265,56 @@ install_extra_code() {
   install_deb_url code "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64"
 }
 
-# docker_repo_codename — this release's codename, or noble (24.04) while Docker
-# has not published packages for it yet (new releases wait a few months).
-docker_repo_codename() {
-  local codename
+# apt_repo_codename URL NAME — this release's codename when the apt repository
+# at URL publishes it, or noble (24.04) while it does not yet (third-party
+# repositories wait a few months after an Ubuntu release).
+apt_repo_codename() {
+  local url=$1 name=$2 codename
   codename=$(sed -n 's/^VERSION_CODENAME=//p' "${DUCAL_SYSROOT:-}/etc/os-release" | tr -d '"')
-  if [[ -n $codename ]] && curl -fsSL --retry 2 -o /dev/null "https://download.docker.com/linux/ubuntu/dists/$codename/Release"; then
+  if [[ -n $codename ]] && curl -fsSL --retry 2 -o /dev/null "$url/dists/$codename/Release"; then
     echo "$codename"
   else
-    log_warn "Docker has no packages for Ubuntu ${codename:-this release} yet, using the 24.04 (noble) ones"
+    log_warn "$name has no packages for Ubuntu ${codename:-this release} yet, using the 24.04 (noble) ones"
     echo noble
   fi
+}
+
+docker_repo_codename() { apt_repo_codename https://download.docker.com/linux/ubuntu Docker; }
+
+DUCAL_ULAUNCHER_PPA=https://ppa.launchpadcontent.net/agornostal/ulauncher/ubuntu
+DUCAL_ULAUNCHER_KEY=59EBDE772980C381CA13FA59FAF1020699503176 # Launchpad PPA for Aleksandr Gornostal
+
+# install_ulauncher — Ulauncher (an app launcher that does not depend on the GNOME
+# version) from its PPA, started at every login. Fails without changing apt when
+# the PPA cannot be added.
+install_ulauncher() {
+  local list=/etc/apt/sources.list.d/ulauncher.list key=/etc/apt/keyrings/ulauncher.asc
+  if ! has_cmd ulauncher; then
+    log_step "Installing Ulauncher"
+    as_root install -m 0755 -d /etc/apt/keyrings
+    if ! curl -fsSL --retry 2 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x$DUCAL_ULAUNCHER_KEY" |
+      as_root tee "$key" >/dev/null; then
+      log_warn "Could not get the Ulauncher signing key"
+      return 1
+    fi
+    as_root chmod a+r "$key"
+    echo "deb [signed-by=$key] $DUCAL_ULAUNCHER_PPA $(apt_repo_codename "$DUCAL_ULAUNCHER_PPA" Ulauncher) main" |
+      as_root tee "$list" >/dev/null
+    as_root apt-get update -qq || log_warn "apt-get update failed"
+    DUCAL_APT_UPDATED=1
+    apt_install ulauncher
+    if ! has_cmd ulauncher; then
+      as_root rm -f "$list" # a repository that gave nothing must not slow every apt update
+      return 1
+    fi
+  fi
+  local settings="$HOME/.config/ulauncher/settings.json"
+  if [[ ! -f $settings ]]; then
+    mkdir -p "$(dirname "$settings")"
+    printf '{\n    "show-indicator-icon": false,\n    "theme-name": "dark"\n}\n' >"$settings"
+  fi
+  systemctl --user enable ulauncher.service 2>/dev/null || true
+  systemctl --user start ulauncher.service 2>/dev/null || true
 }
 
 install_extra_docker() {
